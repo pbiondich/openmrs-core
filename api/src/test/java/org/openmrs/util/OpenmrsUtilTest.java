@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -1072,5 +1073,13 @@ public class OpenmrsUtilTest extends BaseContextSensitiveTest {
 		String result = OpenmrsUtil.isValidNumericValue(120.0f, obs);
 
 		assertEquals("", result);
+	}
+
+	@Test
+	public void getCorePrivileges_shouldIncludeTheAssertionModelPrivileges() {
+		Map<String, String> corePrivileges = OpenmrsUtil.getCorePrivileges();
+
+		assertTrue(corePrivileges.containsKey(PrivilegeConstants.CREATE_PRELIMINARY_OBS));
+		assertTrue(corePrivileges.containsKey(PrivilegeConstants.ATTEST_OBS));
 	}
 }

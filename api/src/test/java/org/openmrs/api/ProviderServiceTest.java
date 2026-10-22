@@ -31,7 +31,6 @@ import org.openmrs.ProviderRole;
 import org.openmrs.ProviderType;
 import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
-import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -368,8 +367,6 @@ public class ProviderServiceTest extends BaseContextSensitiveTest {
 		Provider provider = new Provider();
 		provider.setProviderType(ProviderType.DIGITAL);
 		User daemon = Context.getUserService().getUserByUuid("A4F30A1B-5EB9-11DF-A648-37A07F9C90FB");
-		// the test data predates user_type; a migrated database has the Daemon as SOFTWARE
-		daemon.setUserType(UserType.SOFTWARE);
 		provider.setUser(daemon);
 
 		APIException e = assertThrows(APIException.class, () -> service.saveProvider(provider));
