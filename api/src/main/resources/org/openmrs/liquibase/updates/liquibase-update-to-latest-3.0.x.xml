@@ -239,4 +239,32 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p1-device-agent-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="device_agent"/>
+			</not>
+		</preConditions>
+		<comment>
+			One row per device that acts as a user, such as an analyser or a monitor. The identifier names the device
+			and never changes; the location is where the device is now
+		</comment>
+		<createTable tableName="device_agent">
+			<column name="user_id" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="identifier" type="VARCHAR(255)">
+				<constraints nullable="false" unique="true" uniqueConstraintName="device_agent_identifier"/>
+			</column>
+			<column name="location_id" type="INT"/>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="device_agent" baseColumnNames="user_id"
+			constraintName="device_agent_user" referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="device_agent" baseColumnNames="location_id"
+			constraintName="device_agent_location" referencedTableName="location" referencedColumnNames="location_id"/>
+		<rollback>
+			<dropTable tableName="device_agent"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

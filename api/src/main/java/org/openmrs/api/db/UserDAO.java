@@ -11,6 +11,7 @@ package org.openmrs.api.db;
 
 import java.util.List;
 
+import org.openmrs.DeviceAgent;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
@@ -239,4 +240,19 @@ public interface UserDAO {
 	 * @see UserService#getSoftwareAgentVersions(String)
 	 */
 	List<SoftwareAgent> getSoftwareAgentVersions(String name);
+
+	/**
+	 * @see UserService#createDeviceAgent(DeviceAgent, String)
+	 */
+	DeviceAgent saveDeviceAgent(DeviceAgent agent);
+
+	/**
+	 * @see UserService#getDeviceAgent(User)
+	 */
+	DeviceAgent getDeviceAgent(User user);
+
+	/**
+	 * @see UserService#getDeviceAgentByIdentifier(String)
+	 */
+	DeviceAgent getDeviceAgentByIdentifier(String identifier);
 }
