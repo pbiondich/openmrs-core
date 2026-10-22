@@ -11,6 +11,7 @@ package org.openmrs.api.db;
 
 import java.util.Date;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
@@ -18,6 +19,7 @@ import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
 import org.openmrs.Person;
+import org.openmrs.Provider;
 import org.openmrs.Visit;
 import org.openmrs.api.ObsService;
 import org.openmrs.parameter.ObsSearchCriteria;
@@ -130,4 +132,23 @@ public interface ObsDAO {
 	        List<Concept> answers, List<PERSON_TYPE> personTypes, List<Location> locations, Integer obsGroupId,
 	        Date fromDate, Date toDate, List<ConceptName> valueCodedNameAnswers, List<Visit> visits,
 	        boolean includeVoidedObs, String accessionNumber) throws DAOException;
+
+	/**
+	 * Runs work that queries the database without first flushing the session, so an obs being edited
+	 * inside a service method is not written before the service decides what to do with it.
+	 *
+	 * @param work the work to run
+	 * @return what the work returns
+	 */
+	<T> T withoutAutoFlush(Supplier<T> work);
+
+	/**
+	 * @see ObsService#getObservationsByAsserter(Provider, Integer, Integer)
+	 */
+	List<Obs> getObservationsByAsserter(Provider asserter, Integer startIndex, Integer limit);
+
+	/**
+	 * @see ObsService#getObservationsBySoftwareVersion(String, String, Integer, Integer)
+	 */
+	List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit);
 }

@@ -19,6 +19,7 @@ import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
 import org.openmrs.Person;
+import org.openmrs.Provider;
 import org.openmrs.Visit;
 import org.openmrs.api.db.ObsDAO;
 import org.openmrs.obs.ComplexObsHandler;
@@ -686,4 +687,34 @@ public interface ObsService extends OpenmrsService {
 	@PreAuthorize("hasPermission(#obsSearchCriteria?.whom, '" + PrivilegeConstants.GET_OBS + "')")
 	//TODO: DAO auth filter
 	public Integer getObservationCount(ObsSearchCriteria obsSearchCriteria) throws APIException;
+
+	/**
+	 * @param asserter a provider
+	 * @param startIndex the index of the first result to return, or null for the first
+	 * @param limit the most results to return, or null for all of them
+	 * @return the unvoided obs that the provider asserted, oldest first
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS + "')")
+	@PostFilter("hasPermission(filterObject, '" + PrivilegeConstants.GET_OBS + "')")
+	List<Obs> getObservationsByAsserter(Provider asserter, Integer startIndex, Integer limit);
+
+	/**
+	 * Finds everything one version of a piece of software asserted, for example to review or re-derive
+	 * it after a problem is found in that version.
+	 *
+	 * @param name the name of the software
+	 * @param version the version of the software
+	 * @param startIndex the index of the first result to return, or null for the first
+	 * @param limit the most results to return, or null for all of them
+	 * @return the unvoided obs asserted by that version's digital provider, oldest first
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS + "')")
+	@PostFilter("hasPermission(filterObject, '" + PrivilegeConstants.GET_OBS + "')")
+	List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit);
 }

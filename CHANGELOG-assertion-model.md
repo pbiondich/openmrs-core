@@ -36,3 +36,10 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   `saveProvider` and `retireProvider` refuse a change), so its past assertions stay its own. A digital provider's name
   is its user's username, and provider search matches the user's username and system id.
   `ProviderService.getProviderByUser(User)` finds it.
+- `obs.asserter_id` (nullable, indexed, FK provider), mapped as `Obs.asserter`: the provider who made the claim an obs
+  records; null means unknown. `ObsService.saveObs` fills it on a new obs when the caller leaves it unset: a group
+  member takes its parent's; otherwise a software or device creator's digital provider, or a person's provider when
+  the person has exactly one that is not retired; anything else stays unknown. An edit keeps the claim's asserter
+  unless the caller sets another, so moving an encounter or merging patients never re-attributes obs. Existing obs are
+  backfilled only where their encounter has exactly one provider. `ObsService.getObservationsByAsserter` and
+  `getObservationsBySoftwareVersion` find them, a page at a time.

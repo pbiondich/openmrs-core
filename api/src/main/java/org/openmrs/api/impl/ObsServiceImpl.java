@@ -11,6 +11,7 @@ package org.openmrs.api.impl;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,12 +24,16 @@ import org.openmrs.Location;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.Person;
+import org.openmrs.Provider;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.Visit;
 import org.openmrs.aop.RequiredDataAdvice;
 import org.openmrs.api.APIException;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.ObsService;
 import org.openmrs.api.PatientService;
+import org.openmrs.api.ProviderService;
 import org.openmrs.api.RefByUuid;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.ObsDAO;
@@ -164,6 +169,8 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		Obs newObs = Obs.newInstance(obs);
 
 		unsetVoidedAndCreationProperties(newObs, obs);
+		// the new row keeps the claim's asserter (Obs.newInstance copies it) unless the caller set another:
+		// moving an encounter or merging patients re-saves obs without anyone re-asserting them
 		handleObsWithComplexConcept(newObs);
 		Obs.Status originalStatus = dao.getSavedStatus(obs);
 		updateStatusIfNecessary(newObs, originalStatus);
@@ -222,10 +229,53 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	}
 
 	private Obs saveNewOrVoidedObs(Obs obs, String changeMessage) {
+		if (obs.getObsId() == null && obs.getAsserter() == null) {
+			if (obs.getObsGroup() != null && obs.getObsGroup().getAsserter() != null) {
+				// a group's members carry the claim its parent makes
+				obs.setAsserter(obs.getObsGroup().getAsserter());
+			} else {
+				User creator = obs.getCreator() != null ? obs.getCreator() : Context.getAuthenticatedUser();
+				obs.setAsserter(dao.withoutAutoFlush(() -> asserterFor(creator)));
+			}
+		}
 		handleObsWithComplexConcept(obs);
 		Obs ret = dao.saveObs(obs);
 		saveObsGroup(ret, changeMessage);
 		return ret;
+	}
+
+	/**
+	 * The provider who asserts what a user enters: a software or device user's digital provider, or a
+	 * person's provider when the person has exactly one that is not retired. Anything else is unknown,
+	 * and this returns null rather than guess.
+	 */
+	private Provider asserterFor(User user) {
+		if (user == null) {
+			return null;
+		}
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
+			Context.addProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+			if (user.getUserId() != null) {
+				// callers such as the HL7 handler pass a user that carries only its id
+				user = Context.getUserService().getUser(user.getUserId());
+				if (user == null) {
+					return null;
+				}
+			}
+			ProviderService providerService = Context.getProviderService();
+			if (user.getUserType() != UserType.HUMAN) {
+				return providerService.getProviderByUser(user);
+			}
+			if (user.getPerson() == null) {
+				return null;
+			}
+			Collection<Provider> providers = providerService.getProvidersByPerson(user.getPerson(), false);
+			return providers.size() == 1 ? providers.iterator().next() : null;
+		} finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_USERS);
+		}
 	}
 
 	private void evictObsAndChildren(Obs obs) {
@@ -740,4 +790,22 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		return Arrays.asList(Obs.class);
 	}
 
+	/**
+	 * @see org.openmrs.api.ObsService#getObservationsByAsserter(Provider, Integer, Integer)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<Obs> getObservationsByAsserter(Provider asserter, Integer startIndex, Integer limit) {
+		return dao.getObservationsByAsserter(asserter, startIndex, limit);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#getObservationsBySoftwareVersion(String, String, Integer,
+	 *      Integer)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit) {
+		return dao.getObservationsBySoftwareVersion(name, version, startIndex, limit);
+	}
 }

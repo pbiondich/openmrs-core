@@ -12,6 +12,7 @@ package org.openmrs.api.db.hibernate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Supplier;
 
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -27,6 +28,7 @@ import org.hibernate.FlushMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.query.NativeQuery;
+import org.hibernate.query.Query;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
@@ -34,6 +36,7 @@ import org.openmrs.Location;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.Person;
+import org.openmrs.Provider;
 import org.openmrs.User;
 import org.openmrs.Visit;
 import org.openmrs.api.db.DAOException;
@@ -551,5 +554,54 @@ public class HibernateObsDAO implements ObsDAO {
 			this.maxRows = maxRows;
 			this.paged = paged;
 		}
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#withoutAutoFlush(Supplier)
+	 */
+	@Override
+	public <T> T withoutAutoFlush(Supplier<T> work) {
+		Session session = sessionFactory.getCurrentSession();
+		FlushMode flushMode = session.getHibernateFlushMode();
+		session.setHibernateFlushMode(FlushMode.MANUAL);
+		try {
+			return work.get();
+		} finally {
+			session.setHibernateFlushMode(flushMode);
+		}
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#getObservationsByAsserter(Provider, Integer, Integer)
+	 */
+	@Override
+	public List<Obs> getObservationsByAsserter(Provider asserter, Integer startIndex, Integer limit) {
+		Query<Obs> query = sessionFactory.getCurrentSession()
+		        .createQuery("from Obs where asserter = :asserter and voided = false order by obsId", Obs.class)
+		        .setParameter("asserter", asserter);
+		return page(query, startIndex, limit).getResultList();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#getObservationsBySoftwareVersion(String, String, Integer, Integer)
+	 */
+	@Override
+	public List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit) {
+		Query<Obs> query = sessionFactory.getCurrentSession()
+		        .createQuery("select o from Obs o, SoftwareAgent a where o.asserter.user = a.user and a.name = :name "
+		                + "and a.version = :version and o.voided = false order by o.obsId",
+		            Obs.class)
+		        .setParameter("name", name).setParameter("version", version);
+		return page(query, startIndex, limit).getResultList();
+	}
+
+	private Query<Obs> page(Query<Obs> query, Integer startIndex, Integer limit) {
+		if (startIndex != null) {
+			query.setFirstResult(startIndex);
+		}
+		if (limit != null) {
+			query.setMaxResults(limit);
+		}
+		return query;
 	}
 }

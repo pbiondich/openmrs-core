@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 7;
+	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 9;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -42,6 +42,20 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 		String latestSnapshot = finder.getLatestSnapshotVersion().get();
 		List<String> changeLogs = finder.getChangeLogCombinations().get(latestSnapshot);
 		updateDatabase(changeLogs);
+
+		// run the asserter backfill again, now that there are obs for it to fill
+		String latestUpdates = changeLogs.get(changeLogs.size() - 1);
+		insertEncountersWithOneTwoAndNoProviders();
+		Liquibase backfill = getLiquibase(latestUpdates);
+		backfill.rollback(1, (String) null);
+		backfill.getDatabase().getConnection().commit();
+		updateDatabase(latestUpdates);
+
+		try (Connection connection = getConnection()) {
+			assertEquals(Integer.valueOf(1), getAsserterId(connection, 1));
+			assertEquals(null, getAsserterId(connection, 2));
+			assertEquals(null, getAsserterId(connection, 3));
+		}
 
 		try (Connection connection = getConnection()) {
 			assertEquals("SOFTWARE", getUserType(connection, "daemon"));
@@ -63,6 +77,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "device_agent", "user_id"));
 			assertFalse(hasColumn(connection, "provider", "user_id"));
 			assertFalse(hasColumn(connection, "provider", "provider_type"));
+			assertFalse(hasColumn(connection, "obs", "asserter_id"));
 			assertFalse(hasColumn(connection, "software_agent", "user_id"));
 			assertFalse(isPersonIdNullable(connection));
 		}
@@ -80,6 +95,47 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 				statement.execute("DROP FUNCTION IF EXISTS uuid()");
 				connection.commit();
 			}
+		}
+	}
+
+	private void insertEncountersWithOneTwoAndNoProviders() throws SQLException {
+		String[] inserts = {
+		        "INSERT INTO patient (patient_id, creator, date_created, voided) VALUES (1, 1, '2026-01-01', FALSE)",
+		        "INSERT INTO encounter_type (encounter_type_id, name, creator, date_created, retired, uuid) "
+		                + "VALUES (1, 'Visit', 1, '2026-01-01', FALSE, 'et-1')",
+		        "INSERT INTO provider (provider_id, person_id, identifier, creator, date_created, retired, uuid) "
+		                + "VALUES (1, 1, 'P1', 1, '2026-01-01', FALSE, 'p-1')",
+		        "INSERT INTO provider (provider_id, person_id, identifier, creator, date_created, retired, uuid) "
+		                + "VALUES (2, 1, 'P2', 1, '2026-01-01', FALSE, 'p-2')" };
+		try (Connection connection = getConnection(); Statement statement = connection.createStatement()) {
+			for (String insert : inserts) {
+				statement.execute(insert);
+			}
+			// encounter 1 has one provider, encounter 2 has two, encounter 3 has none; each has one obs
+			for (int encounter = 1; encounter <= 3; encounter++) {
+				statement.execute("INSERT INTO encounter (encounter_id, encounter_type, patient_id, encounter_datetime, "
+				        + "creator, date_created, voided, uuid) VALUES (" + encounter + ", 1, 1, '2026-01-01', 1, "
+				        + "'2026-01-01', FALSE, 'e-" + encounter + "')");
+				statement.execute("INSERT INTO obs (obs_id, person_id, concept_id, encounter_id, obs_datetime, creator, "
+				        + "date_created, voided, uuid) VALUES (" + encounter + ", 1, 1, " + encounter + ", '2026-01-01', 1, "
+				        + "'2026-01-01', FALSE, 'o-" + encounter + "')");
+			}
+			statement.execute("INSERT INTO encounter_provider (encounter_id, provider_id, encounter_role_id, creator, "
+			        + "date_created, voided, uuid) VALUES (1, 1, 1, 1, '2026-01-01', FALSE, 'ep-1')");
+			statement.execute("INSERT INTO encounter_provider (encounter_id, provider_id, encounter_role_id, creator, "
+			        + "date_created, voided, uuid) VALUES (2, 1, 1, 1, '2026-01-01', FALSE, 'ep-2')");
+			statement.execute("INSERT INTO encounter_provider (encounter_id, provider_id, encounter_role_id, creator, "
+			        + "date_created, voided, uuid) VALUES (2, 2, 1, 1, '2026-01-01', FALSE, 'ep-3')");
+			connection.commit();
+		}
+	}
+
+	private Integer getAsserterId(Connection connection, int obsId) throws SQLException {
+		try (Statement statement = connection.createStatement();
+		        ResultSet rs = statement.executeQuery("SELECT asserter_id FROM obs WHERE obs_id = " + obsId)) {
+			assertTrue(rs.next(), "no obs " + obsId);
+			int asserterId = rs.getInt(1);
+			return rs.wasNull() ? null : asserterId;
 		}
 	}
 

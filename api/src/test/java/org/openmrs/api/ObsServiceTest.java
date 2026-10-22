@@ -47,6 +47,10 @@ import org.openmrs.ObsReferenceRange;
 import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.Person;
+import org.openmrs.Provider;
+import org.openmrs.ProviderType;
+import org.openmrs.SoftwareAgent;
+import org.openmrs.User;
 import org.openmrs.Visit;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.ObsServiceImpl;
@@ -2085,6 +2089,171 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 	/**
 	 * @see ObsService#saveObs(Obs,String)
 	 */
+	@Test
+	public void saveObs_shouldSetTheAsserterToTheEnteringPersonsOnlyProvider() {
+		Obs obs = Context.getObsService().saveObs(newNumericObs(), null);
+
+		assertEquals(1, obs.getAsserter().getProviderId().intValue());
+	}
+
+	@Test
+	public void saveObs_shouldSetTheAsserterToASoftwareCreatorsDigitalProvider() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs obs = newNumericObs();
+		obs.setCreator(extractor.getUser());
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(extractor, obs.getAsserter());
+	}
+
+	@Test
+	public void saveObs_shouldLeaveTheAsserterUnknownWhenTheCreatorsPersonHasNoProvider() {
+		Obs obs = newNumericObs();
+		obs.setCreator(Context.getUserService().getUser(501));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertNull(obs.getAsserter());
+	}
+
+	@Test
+	public void saveObs_shouldKeepAnAsserterTheCallerSet() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs obs = newNumericObs();
+		obs.setAsserter(extractor);
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(extractor, obs.getAsserter());
+	}
+
+	@Test
+	public void saveObs_shouldKeepTheAsserterWhenAnObsIsEdited() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs saved = saveAndReload(newNumericObs(), extractor);
+
+		saved.setValueNumeric(51d);
+		Obs edited = Context.getObsService().saveObs(saved, "corrected");
+
+		assertEquals(extractor.getProviderId(), edited.getAsserter().getProviderId());
+	}
+
+	@Test
+	public void saveObs_shouldUseADifferentAsserterTheCallerSetOnAnEdit() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs saved = saveAndReload(newNumericObs(), extractor);
+		Provider nurse = Context.getProviderService().getProvider(1);
+
+		saved.setValueNumeric(51d);
+		saved.setAsserter(nurse);
+		Obs edited = Context.getObsService().saveObs(saved, "corrected");
+
+		assertEquals(nurse.getProviderId(), edited.getAsserter().getProviderId());
+	}
+
+	@Test
+	public void saveEncounter_shouldKeepTheObsAssertersWhenTheEncounterMoves() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs obs = newNumericObs();
+		obs.setEncounter(Context.getEncounterService().getEncounter(3));
+		saveAndReload(obs, extractor);
+
+		Encounter encounter = Context.getEncounterService().getEncounter(3);
+		encounter.setLocation(Context.getLocationService().getLocation(2));
+		Context.getEncounterService().saveEncounter(encounter);
+		Context.flushSession();
+
+		for (Obs current : Context.getObsService().getObservationsByAsserter(extractor, null, null)) {
+			assertEquals(2, current.getLocation().getLocationId().intValue());
+		}
+		assertEquals(1, Context.getObsService().getObservationsByAsserter(extractor, null, null).size());
+	}
+
+	@Test
+	public void saveObs_shouldGiveGroupMembersTheirParentsAsserter() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs parent = newNumericObs();
+		parent.setConcept(Context.getConceptService().getConcept(23));
+		parent.setValueNumeric(null);
+		parent.setAsserter(extractor);
+		Obs member = newNumericObs();
+		parent.addGroupMember(member);
+
+		Context.getObsService().saveObs(parent, null);
+
+		assertEquals(extractor, member.getAsserter());
+	}
+
+	@Test
+	public void saveObs_shouldFindTheProviderForACreatorThatCarriesOnlyItsId() {
+		Provider extractor = newDigitalProvider("extractor", "0.1");
+		Obs obs = newNumericObs();
+		obs.setCreator(new User(extractor.getUser().getUserId()));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(extractor, obs.getAsserter());
+	}
+
+	@Test
+	public void saveObs_shouldLeaveTheAsserterUnknownForASoftwareUserWithoutAProvider() {
+		User user = new User();
+		user.setUsername("transcriber-0.1");
+		Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, "transcriber", "0.1"), "Openmr5xy");
+		Obs obs = newNumericObs();
+		obs.setCreator(user);
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertNull(obs.getAsserter());
+	}
+
+	private Obs saveAndReload(Obs obs, Provider asserter) {
+		obs.setAsserter(asserter);
+		Context.getObsService().saveObs(obs, null);
+		Context.flushSession();
+		Context.clearSession();
+		return Context.getObsService().getObs(obs.getObsId());
+	}
+
+	@Test
+	public void getObservationsBySoftwareVersion_shouldFindWhatOneVersionAsserted() {
+		Provider first = newDigitalProvider("extractor", "0.1");
+		Provider second = newDigitalProvider("extractor", "0.2");
+		Obs byFirst = newNumericObs();
+		byFirst.setAsserter(first);
+		Obs bySecond = newNumericObs();
+		bySecond.setAsserter(second);
+		ObsService obsService = Context.getObsService();
+		obsService.saveObs(byFirst, null);
+		obsService.saveObs(bySecond, null);
+
+		assertEquals(List.of(byFirst), obsService.getObservationsBySoftwareVersion("extractor", "0.1", null, null));
+		assertEquals(List.of(bySecond), obsService.getObservationsByAsserter(second, null, null));
+	}
+
+	private Obs newNumericObs() {
+		Obs obs = new Obs();
+		obs.setConcept(Context.getConceptService().getConcept(3));
+		obs.setPerson(new Patient(2));
+		obs.setEncounter(new Encounter(3));
+		obs.setObsDatetime(new Date());
+		obs.setLocation(new Location(1));
+		obs.setValueNumeric(50d);
+		return obs;
+	}
+
+	private Provider newDigitalProvider(String name, String version) {
+		User user = new User();
+		user.setUsername(name + "-" + version);
+		Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, name, version), "Openmr5xy");
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(user);
+		return Context.getProviderService().saveProvider(provider);
+	}
+
 	@Test
 	public void saveObs_shouldCreateVeryBasicObsAndAddNewObsId() {
 		Obs o = new Obs();

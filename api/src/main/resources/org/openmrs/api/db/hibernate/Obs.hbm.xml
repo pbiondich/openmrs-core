@@ -98,6 +98,9 @@
 		</set> 
 		<many-to-one name="previousVersion" class="Obs" column="previous_version" unique="true" />
 
+		<!-- the provider who made the claim; null means unknown -->
+		<many-to-one name="asserter" class="Provider" column="asserter_id" />
+
 		<one-to-one name="referenceRange" class="org.openmrs.ObsReferenceRange" cascade="all"  />
 	</class>
 	

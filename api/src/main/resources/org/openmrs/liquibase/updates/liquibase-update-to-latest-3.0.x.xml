@@ -307,4 +307,45 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p1-obs-asserter-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="obs" columnName="asserter_id"/>
+			</not>
+		</preConditions>
+		<comment>
+			The provider who made the claim an obs records. Null means unknown. Rolling back drops every asserter recorded
+			since; only the backfilled ones can be recovered
+		</comment>
+		<addColumn tableName="obs">
+			<column name="asserter_id" type="INT"/>
+		</addColumn>
+		<createIndex tableName="obs" indexName="obs_asserter">
+			<column name="asserter_id"/>
+		</createIndex>
+		<addForeignKeyConstraint baseTableName="obs" baseColumnNames="asserter_id" constraintName="obs_asserter_fk"
+			referencedTableName="provider" referencedColumnNames="provider_id"/>
+		<rollback>
+			<dropForeignKeyConstraint baseTableName="obs" constraintName="obs_asserter_fk"/>
+			<dropIndex tableName="obs" indexName="obs_asserter"/>
+			<dropColumn tableName="obs" columnName="asserter_id"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p1-obs-asserter-backfill-2026-10-22" author="pbiondich">
+		<comment>
+			Backfill the asserter only where the obs's encounter has exactly one provider; every other existing obs keeps
+			an unknown asserter rather than a guess. Only fills obs whose asserter is still unknown
+		</comment>
+		<sql>
+			UPDATE obs SET asserter_id = (
+				SELECT CASE WHEN COUNT(DISTINCT ep.provider_id) = 1 THEN MIN(ep.provider_id) END
+				FROM encounter_provider ep WHERE ep.encounter_id = obs.encounter_id AND ep.voided = FALSE)
+			WHERE asserter_id IS NULL AND encounter_id IS NOT NULL
+		</sql>
+		<rollback>
+			<!-- nothing to undo here: rolling back the previous changeset drops the column -->
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>
