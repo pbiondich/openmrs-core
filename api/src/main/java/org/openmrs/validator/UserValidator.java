@@ -58,6 +58,7 @@ public class UserValidator implements Validator {
 	 * <strong>Should</strong> fail validation if retired and retireReason is null<br/>
 	 * <strong>Should</strong> fail validation if retired and retireReason is empty<br/>
 	 * <strong>Should</strong> fail validation if retired and retireReason is whitespace<br/>
+	 * <strong>Should</strong> fail validation if userType is null<br/>
 	 * <strong>Should</strong> pass validation if all required fields have proper values<br/>
 	 * <strong>Should</strong> fail validation if email as username enabled and email invalid<br/>
 	 * <strong>Should</strong> fail validation if email as username disabled and email provided<br/>
@@ -76,6 +77,9 @@ public class UserValidator implements Validator {
 		} else {
 			if (user.getRetired() && StringUtils.isBlank(user.getRetireReason())) {
 				errors.rejectValue("retireReason", "error.null");
+			}
+			if (user.getUserType() == null) {
+				errors.rejectValue("userType", "error.null");
 			}
 			if (user.getPerson() == null) {
 				errors.rejectValue("person", "error.null");

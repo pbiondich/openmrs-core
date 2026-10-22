@@ -32,6 +32,7 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Credentials;
 import org.openmrs.api.context.UserContext;
@@ -47,6 +48,7 @@ import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
 import org.openmrs.util.Security;
+import org.openmrs.validator.ValidateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 
@@ -124,6 +126,38 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 
 		createdUser = userService.getUserByUsername("bwolfe");
 		assertTrue(createdUser.equals(u), "The created user should equal the passed in user");
+	}
+
+	@Test
+	public void saveUser_shouldPersistUserType() {
+		User user = userService.getUser(502);
+		user.setUserType(UserType.SOFTWARE);
+		userService.saveUser(user);
+
+		Context.flushSession();
+		Context.clearSession();
+
+		assertEquals(UserType.SOFTWARE, userService.getUser(502).getUserType());
+	}
+
+	@Test
+	public void createUser_shouldNotAllowHumanUserWithoutPersonEvenWhenValidationIsDisabled() {
+		User u = new User();
+		u.setUsername("noperson");
+
+		ValidateUtil.setDisableValidation(true);
+		try {
+			APIException e = assertThrows(APIException.class, () -> userService.createUser(u, "Openmr5xy"));
+			assertEquals("A user of type HUMAN must have a person", e.getMessage());
+		} finally {
+			ValidateUtil.setDisableValidation(false);
+		}
+	}
+
+	@Test
+	public void getUser_shouldDefaultUserTypeToHumanForRowsInsertedWithoutOne() {
+		// standardTestDataset.xml has no user_type column, so the column default applies
+		assertEquals(UserType.HUMAN, userService.getUser(501).getUserType());
 	}
 
 	@Test

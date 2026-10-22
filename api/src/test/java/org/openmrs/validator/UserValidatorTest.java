@@ -129,6 +129,20 @@ public class UserValidatorTest extends BaseContextSensitiveTest {
 		invokeValidateAndAssertHasErrorRetireReason(retireReason);
 	}
 
+	/**
+	 * @see UserValidator#validate(Object,Errors)
+	 */
+	@Test
+	public void validate_shouldFailValidationIfUserTypeIsNull() {
+		User user = new User();
+		user.setUsername("test");
+		user.setUserType(null);
+
+		Errors errors = new BindException(user, "user");
+		validator.validate(user, errors);
+		assertTrue(errors.hasFieldErrors("userType"));
+	}
+
 	private void invokeValidateAndAssertHasErrorRetireReason(String invalidRetireReason) {
 		User user = new User();
 		user.setUsername("test");

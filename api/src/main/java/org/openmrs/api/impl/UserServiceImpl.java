@@ -29,6 +29,7 @@ import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.annotation.Logging;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
@@ -137,11 +138,15 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 
 	/**
 	 * The service's single entry point to {@link UserDAO#saveUser(User, String)}, raising the permit
-	 * that the DAO requires of anything that can change a password.
+	 * that the DAO requires of anything that can change a password. A human user must have a person;
+	 * this is checked here because the database no longer enforces it and validation can be disabled.
 	 *
 	 * @see UserPasswordGuard
 	 */
 	private User daoSaveUser(User user, String password) {
+		if (user.getUserType() == UserType.HUMAN && user.getPerson() == null) {
+			throw new APIException("A user of type HUMAN must have a person");
+		}
 		UserPasswordGuard.enter();
 		try {
 			return dao.saveUser(user, password);
