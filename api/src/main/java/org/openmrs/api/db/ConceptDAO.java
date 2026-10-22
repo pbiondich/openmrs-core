@@ -10,6 +10,7 @@
 package org.openmrs.api.db;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -725,4 +726,14 @@ public interface ConceptDAO {
 	 * @since 3.0.0
 	 */
 	DictionaryVersion saveDictionaryVersion(DictionaryVersion version);
+
+	/**
+	 * @since 3.0.0
+	 */
+	DictionaryVersion getDictionaryVersionByLabel(String label);
+
+	/**
+	 * @since 3.0.0
+	 */
+	DictionaryVersion getDictionaryVersionInUseAt(Date date);
 }

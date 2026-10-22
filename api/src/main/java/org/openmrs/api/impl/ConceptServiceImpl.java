@@ -2305,9 +2305,16 @@ public class ConceptServiceImpl extends BaseOpenmrsService implements ConceptSer
 	@Override
 	@Transactional(readOnly = true)
 	public DictionaryVersion getCurrentDictionaryVersion() {
-		String uuid = Context.getAdministrationService()
-		        .getGlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_DICTIONARY_VERSION);
-		return StringUtils.isBlank(uuid) ? null : dao.getDictionaryVersionByUuid(uuid.trim());
+		return dao.getDictionaryVersionInUseAt(new Date());
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#getDictionaryVersionByLabel(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DictionaryVersion getDictionaryVersionByLabel(String label) {
+		return dao.getDictionaryVersionByLabel(label);
 	}
 
 	/**

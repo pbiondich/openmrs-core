@@ -2621,13 +2621,23 @@ public interface ConceptService extends OpenmrsService {
 	List<DictionaryVersion> getAllDictionaryVersions(boolean includeRetired);
 
 	/**
-	 * The version of the dictionary in use now: the one the global property
-	 * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_DICTIONARY_VERSION} names by uuid.
+	 * @param label the label of a dictionary version, ignoring case
+	 * @return the version, or null if there is none with that label
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CONCEPTS + "')")
+	DictionaryVersion getDictionaryVersionByLabel(String label);
+
+	/**
+	 * The version of the dictionary in use now: the newest version, not retired, whose in-use-from time
+	 * has passed.
 	 * <p>
-	 * <strong>Should</strong> return the version the global property names<br/>
-	 * <strong>Should</strong> return null when the global property names none
+	 * <strong>Should</strong> return the newest version in use<br/>
+	 * <strong>Should</strong> not return a version whose time has not come<br/>
+	 * <strong>Should</strong> not return a retired version<br/>
+	 * <strong>Should</strong> return null when no version is in use
 	 *
-	 * @return the current version, or null if none is set
+	 * @return the current version, or null if none is in use
 	 * @since 3.0.0
 	 */
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CONCEPTS + "')")

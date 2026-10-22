@@ -554,15 +554,21 @@
 				<tableExists tableName="dictionary_version"/>
 			</not>
 		</preConditions>
-		<comment>Releases of the concept dictionary, each named by a label and the terminology releases it was built from</comment>
+		<comment>
+			Releases of the concept dictionary, each named by a unique label and the terminology releases it was built
+			from, and in use from a given time; the current version is the newest one not retired whose time has come
+		</comment>
 		<createTable tableName="dictionary_version">
 			<column name="dictionary_version_id" autoIncrement="true" type="INT">
 				<constraints nullable="false" primaryKey="true"/>
 			</column>
 			<column name="label" type="VARCHAR(255)">
+				<constraints nullable="false" unique="true" uniqueConstraintName="dictionary_version_label"/>
+			</column>
+			<column name="description" type="VARCHAR(255)"/>
+			<column name="in_use_from" type="DATETIME">
 				<constraints nullable="false"/>
 			</column>
-			<column name="description" type="VARCHAR(1024)"/>
 			<column name="ciel_release" type="VARCHAR(50)"/>
 			<column name="snomed_release" type="VARCHAR(50)"/>
 			<column name="loinc_release" type="VARCHAR(50)"/>
@@ -602,8 +608,8 @@
 			</not>
 		</preConditions>
 		<comment>
-			The dictionary version in use when an encounter was entered; null for encounters entered before versions
-			were recorded, which means unknown
+			The dictionary version in use when an encounter was entered, never changed after; null means unknown, as for
+			encounters entered before versions were recorded
 		</comment>
 		<addColumn tableName="encounter">
 			<column name="dictionary_version_id" type="INT"/>

@@ -107,8 +107,9 @@ public class Encounter extends BaseChangeableOpenmrsData {
 	@JoinColumn(name = "visit_id")
 	private Visit visit;
 
+	// recorded when the encounter is entered and never changed after
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "dictionary_version_id")
+	@JoinColumn(name = "dictionary_version_id", updatable = false)
 	private DictionaryVersion dictionaryVersion;
 
 	@OneToMany(mappedBy = "encounter", cascade = CascadeType.ALL)
@@ -871,6 +872,7 @@ public class Encounter extends BaseChangeableOpenmrsData {
 		target.setForm(getForm());
 		target.setLocation(getLocation());
 		target.setPatient(patient);
+		target.setDictionaryVersion(getDictionaryVersion());
 
 		//encounter providers
 		for (EncounterProvider encounterProvider : getEncounterProviders()) {
@@ -1000,8 +1002,9 @@ public class Encounter extends BaseChangeableOpenmrsData {
 	}
 
 	/**
-	 * @return the version of the concept dictionary in use when this encounter was entered, or null
-	 *         where that is unknown, as for encounters entered before versions were recorded
+	 * @return the version of the concept dictionary in use when this encounter was entered, which is
+	 *         not its encounter datetime; null where that is unknown, as for encounters entered before
+	 *         versions were recorded or while no version was in use
 	 * @since 3.0.0
 	 */
 	public DictionaryVersion getDictionaryVersion() {
@@ -1010,7 +1013,7 @@ public class Encounter extends BaseChangeableOpenmrsData {
 
 	/**
 	 * @param dictionaryVersion the version of the concept dictionary in use when this encounter was
-	 *            entered
+	 *            entered; it is saved with a new encounter and never changed after
 	 * @since 3.0.0
 	 */
 	public void setDictionaryVersion(DictionaryVersion dictionaryVersion) {

@@ -110,7 +110,9 @@ public class EncounterServiceImpl extends BaseOpenmrsService implements Encounte
 		// check permissions
 		boolean isNewEncounter = requirePrivilege(encounter);
 
-		if (isNewEncounter && encounter.getDictionaryVersion() == null) {
+		// a copy of an earlier encounter, as transferEncounter makes, keeps the original's creation and its
+		// version, even an unknown one; only an encounter entered now records the current version
+		if (isNewEncounter && encounter.getDateCreated() == null && encounter.getDictionaryVersion() == null) {
 			encounter.setDictionaryVersion(currentDictionaryVersion());
 		}
 
@@ -422,10 +424,8 @@ public class EncounterServiceImpl extends BaseOpenmrsService implements Encounte
 	private DictionaryVersion currentDictionaryVersion() {
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
-			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 			return Context.getConceptService().getCurrentDictionaryVersion();
 		} finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
 		}
 	}

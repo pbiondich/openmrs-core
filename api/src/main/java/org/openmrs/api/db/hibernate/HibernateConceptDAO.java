@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -2587,6 +2588,30 @@ public class HibernateConceptDAO implements ConceptDAO {
 		String hql = "from DictionaryVersion" + (includeRetired ? "" : " where retired = false")
 		        + " order by dictionaryVersionId";
 		return sessionFactory.getCurrentSession().createQuery(hql, DictionaryVersion.class).list();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ConceptDAO#getDictionaryVersionByLabel(String)
+	 */
+	@Override
+	public DictionaryVersion getDictionaryVersionByLabel(String label) {
+		List<DictionaryVersion> versions = sessionFactory.getCurrentSession()
+		        .createQuery("from DictionaryVersion where lower(name) = lower(:label)", DictionaryVersion.class)
+		        .setParameter("label", label).setMaxResults(1).list();
+		return versions.isEmpty() ? null : versions.get(0);
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ConceptDAO#getDictionaryVersionInUseAt(Date)
+	 */
+	@Override
+	public DictionaryVersion getDictionaryVersionInUseAt(Date date) {
+		List<DictionaryVersion> versions = sessionFactory.getCurrentSession()
+		        .createQuery("from DictionaryVersion where retired = false and inUseFrom <= :date"
+		                + " order by inUseFrom desc, dictionaryVersionId desc",
+		            DictionaryVersion.class)
+		        .setParameter("date", date).setMaxResults(1).list();
+		return versions.isEmpty() ? null : versions.get(0);
 	}
 
 	/**

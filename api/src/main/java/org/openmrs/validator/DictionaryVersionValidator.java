@@ -30,7 +30,7 @@ public class DictionaryVersionValidator implements Validator {
 	}
 
 	/**
-	 * <strong>Should</strong> fail if the label is missing<br/>
+	 * <strong>Should</strong> fail if the label or in-use-from time is missing<br/>
 	 * <strong>Should</strong> fail if another version has the same label
 	 *
 	 * @see org.springframework.validation.Validator#validate(java.lang.Object,
@@ -44,6 +44,7 @@ public class DictionaryVersionValidator implements Validator {
 			return;
 		}
 		ValidationUtils.rejectIfEmptyOrWhitespace(errors, "name", "error.name");
+		ValidationUtils.rejectIfEmpty(errors, "inUseFrom", "error.null");
 		if (!errors.hasErrors()) {
 			for (DictionaryVersion other : Context.getConceptService().getAllDictionaryVersions(true)) {
 				if (other.getName().equalsIgnoreCase(version.getName()) && !other.getUuid().equals(version.getUuid())) {

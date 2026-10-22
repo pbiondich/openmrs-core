@@ -14,10 +14,8 @@ import java.util.Date;
 import org.junit.jupiter.api.Test;
 import org.openmrs.DictionaryVersion;
 import org.openmrs.Encounter;
-import org.openmrs.GlobalProperty;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
-import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.validator.DictionaryVersionValidator;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
@@ -31,23 +29,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class DictionaryVersionTest extends BaseContextSensitiveTest {
 
-	@Test
-	public void getCurrentDictionaryVersion_shouldReturnTheVersionTheGlobalPropertyNames() {
-		DictionaryVersion version = makeCurrent(newVersion("CIEL 2026-09"));
+	private static final long DAY = 24L * 60 * 60 * 1000;
 
-		assertEquals(version, Context.getConceptService().getCurrentDictionaryVersion());
+	@Test
+	public void getCurrentDictionaryVersion_shouldReturnTheNewestVersionInUse() {
+		newVersion("CIEL 2026-03", daysAgo(200));
+		DictionaryVersion newest = newVersion("CIEL 2026-09", daysAgo(10));
+
+		assertEquals(newest, Context.getConceptService().getCurrentDictionaryVersion());
 	}
 
 	@Test
-	public void getCurrentDictionaryVersion_shouldReturnNullWhenTheGlobalPropertyNamesNone() {
-		newVersion("CIEL 2026-09");
+	public void getCurrentDictionaryVersion_shouldNotReturnAVersionWhoseTimeHasNotCome() {
+		DictionaryVersion inUse = newVersion("CIEL 2026-09", daysAgo(10));
+		newVersion("CIEL 2027-03", daysAgo(-30));
+
+		assertEquals(inUse, Context.getConceptService().getCurrentDictionaryVersion());
+	}
+
+	@Test
+	public void getCurrentDictionaryVersion_shouldNotReturnARetiredVersion() {
+		DictionaryVersion older = newVersion("CIEL 2026-03", daysAgo(200));
+		DictionaryVersion newest = newVersion("CIEL 2026-09", daysAgo(10));
+
+		Context.getConceptService().retireDictionaryVersion(newest, "withdrawn");
+
+		assertEquals(older, Context.getConceptService().getCurrentDictionaryVersion());
+	}
+
+	@Test
+	public void getCurrentDictionaryVersion_shouldReturnNullWhenNoVersionIsInUse() {
+		newVersion("CIEL 2027-03", daysAgo(-30));
 
 		assertNull(Context.getConceptService().getCurrentDictionaryVersion());
 	}
 
 	@Test
+	public void getDictionaryVersionByLabel_shouldIgnoreCase() {
+		DictionaryVersion version = newVersion("CIEL 2026-09", daysAgo(10));
+
+		assertEquals(version, Context.getConceptService().getDictionaryVersionByLabel("ciel 2026-09"));
+	}
+
+	@Test
 	public void saveEncounter_shouldRecordTheCurrentDictionaryVersionOnANewEncounter() {
-		DictionaryVersion version = makeCurrent(newVersion("CIEL 2026-09"));
+		DictionaryVersion version = newVersion("CIEL 2026-09", daysAgo(10));
 		Encounter encounter = newEncounter();
 
 		Context.getEncounterService().saveEncounter(encounter);
@@ -57,7 +83,7 @@ public class DictionaryVersionTest extends BaseContextSensitiveTest {
 
 	@Test
 	public void saveEncounter_shouldNotStampAnEncounterEnteredBeforeVersionsWereRecorded() {
-		makeCurrent(newVersion("CIEL 2026-09"));
+		newVersion("CIEL 2026-09", daysAgo(10));
 		Encounter existing = Context.getEncounterService().getEncounter(3);
 
 		existing.setEncounterDatetime(new Date(existing.getEncounterDatetime().getTime() + 1000));
@@ -67,9 +93,33 @@ public class DictionaryVersionTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void saveEncounter_shouldNotRecordAVersionOnACopyOfAnEarlierEncounter() {
+		newVersion("CIEL 2026-09", daysAgo(10));
+		Encounter earlier = Context.getEncounterService().getEncounter(3);
+
+		Encounter copy = Context.getEncounterService().transferEncounter(earlier, Context.getPatientService().getPatient(2));
+
+		assertNull(copy.getDictionaryVersion());
+	}
+
+	@Test
+	public void saveEncounter_shouldKeepTheVersionOfTheEncounterACopyIsMadeFrom() {
+		DictionaryVersion older = newVersion("CIEL 2026-03", daysAgo(200));
+		newVersion("CIEL 2026-09", daysAgo(10));
+		Encounter original = newEncounter();
+		original.setDictionaryVersion(older);
+		Context.getEncounterService().saveEncounter(original);
+
+		Encounter copy = Context.getEncounterService().transferEncounter(original,
+		    Context.getPatientService().getPatient(2));
+
+		assertEquals(older, copy.getDictionaryVersion());
+	}
+
+	@Test
 	public void saveEncounter_shouldKeepAVersionTheCallerSet() {
-		makeCurrent(newVersion("CIEL 2026-09"));
-		DictionaryVersion older = newVersion("CIEL 2026-03");
+		newVersion("CIEL 2026-09", daysAgo(10));
+		DictionaryVersion older = newVersion("CIEL 2026-03", daysAgo(200));
 		Encounter encounter = newEncounter();
 		encounter.setDictionaryVersion(older);
 
@@ -80,25 +130,34 @@ public class DictionaryVersionTest extends BaseContextSensitiveTest {
 
 	@Test
 	public void validate_shouldFailIfAnotherVersionHasTheSameLabel() {
-		newVersion("CIEL 2026-09");
-		DictionaryVersion duplicate = new DictionaryVersion("ciel 2026-09");
-		Errors errors = new BindException(duplicate, "version");
+		newVersion("CIEL 2026-09", daysAgo(10));
+		DictionaryVersion duplicate = new DictionaryVersion("ciel 2026-09", new Date());
 
-		new DictionaryVersionValidator().validate(duplicate, errors);
-
-		assertTrue(errors.hasFieldErrors("name"));
+		assertTrue(validate(duplicate).hasFieldErrors("name"));
 	}
 
-	private DictionaryVersion newVersion(String label) {
-		DictionaryVersion version = new DictionaryVersion(label);
-		version.setCielRelease("v2026-09-01");
+	@Test
+	public void validate_shouldFailIfTheLabelOrInUseFromTimeIsMissing() {
+		Errors errors = validate(new DictionaryVersion());
+
+		assertTrue(errors.hasFieldErrors("name"));
+		assertTrue(errors.hasFieldErrors("inUseFrom"));
+	}
+
+	private Errors validate(DictionaryVersion version) {
+		Errors errors = new BindException(version, "version");
+		new DictionaryVersionValidator().validate(version, errors);
+		return errors;
+	}
+
+	private DictionaryVersion newVersion(String label, Date inUseFrom) {
+		DictionaryVersion version = new DictionaryVersion(label, inUseFrom);
+		version.setCielRelease(label.substring(5));
 		return Context.getConceptService().saveDictionaryVersion(version);
 	}
 
-	private DictionaryVersion makeCurrent(DictionaryVersion version) {
-		Context.getAdministrationService().saveGlobalProperty(
-		    new GlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_DICTIONARY_VERSION, version.getUuid()));
-		return version;
+	private Date daysAgo(int days) {
+		return new Date(System.currentTimeMillis() - days * DAY);
 	}
 
 	private Encounter newEncounter() {

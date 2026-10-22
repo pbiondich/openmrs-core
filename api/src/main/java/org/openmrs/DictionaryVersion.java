@@ -9,6 +9,8 @@
  */
 package org.openmrs;
 
+import java.util.Date;
+
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,8 +23,9 @@ import org.hibernate.envers.Audited;
 
 /**
  * A release of the concept dictionary, named by its label and the releases of the terminologies it
- * was built from. An encounter records the version that was current when it was entered, so its
- * coded obs can be read against the dictionary their author saw.
+ * was built from, and in use from a given time: the current version is the newest one not retired
+ * whose time has come. An encounter records the version current when it was entered, so its coded
+ * obs can be read against the dictionary their author saw.
  *
  * @since 3.0.0
  */
@@ -39,6 +42,9 @@ public class DictionaryVersion extends BaseOpenmrsMetadata {
 	@Column(name = "dictionary_version_id")
 	private Integer dictionaryVersionId;
 
+	@Column(name = "in_use_from", nullable = false)
+	private Date inUseFrom;
+
 	@Column(name = "ciel_release", length = 50)
 	private String cielRelease;
 
@@ -53,9 +59,11 @@ public class DictionaryVersion extends BaseOpenmrsMetadata {
 
 	/**
 	 * @param label how the version is known, such as "CIEL 2026-09"
+	 * @param inUseFrom when the version came into use
 	 */
-	public DictionaryVersion(String label) {
+	public DictionaryVersion(String label, Date inUseFrom) {
 		setName(label);
+		this.inUseFrom = inUseFrom;
 	}
 
 	@Override
@@ -85,6 +93,17 @@ public class DictionaryVersion extends BaseOpenmrsMetadata {
 
 	public void setLabel(String label) {
 		setName(label);
+	}
+
+	/**
+	 * @return when the version came into use
+	 */
+	public Date getInUseFrom() {
+		return inUseFrom;
+	}
+
+	public void setInUseFrom(Date inUseFrom) {
+		this.inUseFrom = inUseFrom;
 	}
 
 	public String getCielRelease() {
