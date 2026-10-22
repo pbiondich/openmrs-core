@@ -13,6 +13,7 @@ import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.OpenmrsUtil;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.Errors;
 import org.springframework.validation.ValidationUtils;
 import org.springframework.validation.Validator;
@@ -53,12 +54,18 @@ public class ObsFinalizationPolicyValidator implements Validator {
 		ValidationUtils.rejectIfEmpty(errors, "agentType", "error.null");
 		ValidationUtils.rejectIfEmpty(errors, "action", "error.null");
 		if (!errors.hasErrors() && !policy.getRetired()) {
-			for (ObsFinalizationPolicy other : Context.getObsService().getAllObsFinalizationPolicies(false)) {
-				if (other.getAgentType() == policy.getAgentType()
-				        && OpenmrsUtil.nullSafeEquals(other.getConceptClass(), policy.getConceptClass())
-				        && !other.getUuid().equals(policy.getUuid())) {
-					errors.rejectValue("conceptClass", "ObsFinalizationPolicy.error.duplicate");
+			try {
+				// managing policies is enough to save one, without the privilege to get them
+				Context.addProxyPrivilege(PrivilegeConstants.GET_OBS_FINALIZATION_POLICIES);
+				for (ObsFinalizationPolicy other : Context.getObsService().getAllObsFinalizationPolicies(false)) {
+					if (other.getAgentType() == policy.getAgentType()
+					        && OpenmrsUtil.nullSafeEquals(other.getConceptClass(), policy.getConceptClass())
+					        && !other.getUuid().equals(policy.getUuid())) {
+						errors.rejectValue("conceptClass", "ObsFinalizationPolicy.error.duplicate");
+					}
 				}
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_OBS_FINALIZATION_POLICIES);
 			}
 		}
 		ValidateUtil.validateFieldLengths(errors, obj.getClass(), "name", "description", "retireReason");

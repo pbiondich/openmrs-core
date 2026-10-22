@@ -21,6 +21,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
 import org.hibernate.type.SqlTypes;
@@ -36,6 +38,7 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "obs_finalization_policy")
 @Audited
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
 public class ObsFinalizationPolicy extends BaseOpenmrsMetadata {
 
 	private static final long serialVersionUID = 1L;
@@ -108,8 +111,8 @@ public class ObsFinalizationPolicy extends BaseOpenmrsMetadata {
 	}
 
 	/**
-	 * @return the kind of agent whose obs this policy covers: the asserter's, or the creator's when the
-	 *         asserter is unknown
+	 * @return the kind of agent whose obs this policy covers: the obs a user of this type saves or
+	 *         edits, and the obs a provider of this type asserts
 	 */
 	public UserType getAgentType() {
 		return agentType;

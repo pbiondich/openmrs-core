@@ -69,6 +69,7 @@ import org.openmrs.util.DateUtil;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsConstants.PERSON_TYPE;
 import org.openmrs.util.OpenmrsUtil;
+import org.openmrs.util.RoleConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -2361,17 +2362,78 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void saveObs_shouldGoByTheCreatorsTypeWhenTheAsserterIsUnknown() {
+	public void saveObs_shouldGoByTheAuthenticatedUsersTypeWhenTheAsserterIsUnknown() {
 		requireAttestation(UserType.SOFTWARE, null);
-		User user = new User();
-		user.setUsername("transcriber-0.1");
-		Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, "transcriber", "0.1"), "Openmr5xy");
+		actAs(newSoftwareUser("transcriber", "0.1"));
 		Obs obs = newObsInEncounter();
-		obs.setCreator(user);
 
 		Context.getObsService().saveObs(obs, null);
 
 		assertNull(obs.getAsserter());
+		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldRequireAttestationWhenSoftwareNamesAPersonAsTheAsserter() {
+		requireAttestation(UserType.SOFTWARE, null);
+		actAs(newSoftwareUser("transcriber", "0.1"));
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(new Provider(1));
+		obs.setCreator(Context.getUserService().getUser(1));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldGoByTheAuthenticatedUserRatherThanTheCreator() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		obs.setCreator(newSoftwareUser("transcriber", "0.1"));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldMakeASoftwareEditOfAPersonsFinalObsPreliminary() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+		requireAttestation(UserType.SOFTWARE, null);
+		actAs(newSoftwareUser("transcriber", "0.1"));
+
+		obs.setValueNumeric(51d);
+		Obs edited = Context.getObsService().saveObs(obs, "corrected");
+
+		assertEquals(Obs.Status.PRELIMINARY, reload(edited).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldLetAPersonAmendAnObsSoftwareAssertedThatIsFinal() {
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+		obs = saveAndReload(obs, obs.getAsserter());
+		requireAttestation(UserType.SOFTWARE, null);
+
+		obs.setValueNumeric(51d);
+		Obs edited = Context.getObsService().saveObs(obs, "corrected");
+
+		assertEquals(Obs.Status.AMENDED, reload(edited).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldNotChangeTheStatusOfAnObsWhileItIsVoided() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+		obs = saveAndReload(obs, obs.getAsserter());
+
+		obs.setVoided(true);
+		obs.setVoidReason("hiding");
+		obs.setStatus(Obs.Status.FINAL);
+		Context.getObsService().saveObs(obs, "hiding");
+
 		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
 	}
 
@@ -2425,6 +2487,19 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 
 		assertNull(obsService.getObsFinalizationPolicy(UserType.SOFTWARE, drug));
 		assertNull(obsService.getObsFinalizationPolicy(UserType.DEVICE, drug));
+	}
+
+	private User newSoftwareUser(String name, String version) {
+		User user = new User();
+		user.setUsername(name + "-" + version);
+		Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, name, version), "Openmr5xy");
+		return user;
+	}
+
+	private void actAs(User user) {
+		user.addRole(Context.getUserService().getRole(RoleConstants.SUPERUSER));
+		Context.getUserService().saveUser(user);
+		Context.becomeUser(user.getSystemId());
 	}
 
 	private ObsFinalizationPolicy requireAttestation(UserType agentType, ConceptClass conceptClass) {

@@ -56,10 +56,12 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   already `varchar(16)`. Obs voided before this change are not backfilled, since their status would be lost.
 - `obs_finalization_policy` (`ObsFinalizationPolicy`, metadata): for an agent type (`HUMAN` | `SOFTWARE` | `DEVICE`),
   optionally narrowed to a concept class, the action `AUTO_FINAL` or `REQUIRE_ATTESTATION`. Seeded with DEVICE ->
-  `AUTO_FINAL` and SOFTWARE -> `REQUIRE_ATTESTATION`. `ObsService.saveObs` saves a new obs `PRELIMINARY`, whatever
-  status the caller gave it, when the policy that applies requires attestation: the concept class's policy if there
-  is one, else the agent type's. The agent type is the asserter's, or the creator's when the asserter is unknown; the
-  Daemon is no agent, so its obs (HL7, scheduled tasks) are untouched. Editing a preliminary obs whose policy requires
-  attestation keeps it preliminary, and unvoiding one brings it back preliminary. `min_score` from the plan waits for
-  Phase 3, when there is a score to compare. Privileges `Get Obs Finalization Policies` and `Manage Obs Finalization
-  Policies`.
+  `AUTO_FINAL` and SOFTWARE -> `REQUIRE_ATTESTATION`; the concept class's policy takes precedence over the agent
+  type's. `ObsService.saveObs` saves a new obs `PRELIMINARY`, whatever status the caller gave it, when the policy for
+  the authenticated user's type or for the asserter's type requires attestation. The user making the call always
+  counts, since a caller can name any asserter or creator; the Daemon is no agent, so obs it saves (HL7, scheduled
+  tasks) are untouched. An edit is preliminary when the editor's policy requires attestation, or when the obs was
+  still preliminary and its asserter's policy does, so a person amending an attested obs gets `AMENDED`. Unvoiding an
+  obs that was entered in error applies the same rule, and a voided obs's status cannot be changed. `min_score` from
+  the plan waits for Phase 3, when there is a score to compare. Privileges `Get Obs Finalization Policies` and
+  `Manage Obs Finalization Policies`.

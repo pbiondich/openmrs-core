@@ -181,9 +181,9 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		handleObsWithComplexConcept(newObs);
 		Obs.Status originalStatus = dao.getSavedStatus(obs);
 		updateStatusIfNecessary(newObs, originalStatus);
-		// editing an obs that waits for attestation does not finalize it; only attestation does
-		if (Obs.Status.PRELIMINARY.equals(originalStatus)
-		        && finalizationActionFor(newObs) == ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION) {
+		// an edit by an agent whose obs need attestation needs it too, and editing an obs that still
+		// waits for attestation does not finalize it: only attestation does
+		if (requiresAttestation(newObs, Obs.Status.PRELIMINARY.equals(originalStatus))) {
 			newObs.setStatus(Obs.Status.PRELIMINARY);
 		}
 
@@ -250,8 +250,20 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 				obs.setAsserter(dao.withoutAutoFlush(() -> asserterFor(creator)));
 			}
 		}
-		if (obs.getObsId() == null && finalizationActionFor(obs) == ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION) {
-			obs.setStatus(Obs.Status.PRELIMINARY);
+		if (obs.getObsId() == null) {
+			if (requiresAttestation(obs, true)) {
+				obs.setStatus(Obs.Status.PRELIMINARY);
+			}
+		} else {
+			// a voided obs is out of the obs interceptor's sight, so its status cannot change while it is
+			// voided and carry over when it is unvoided. Entered in error is the exception: voidObs marks it,
+			// and unvoiding gives the obs its status afresh
+			if (!Obs.Status.ENTERED_IN_ERROR.equals(obs.getStatus())) {
+				Obs.Status savedStatus = dao.getSavedStatus(obs);
+				if (savedStatus != obs.getStatus()) {
+					obs.setStatus(savedStatus);
+				}
+			}
 		}
 		handleObsWithComplexConcept(obs);
 		Obs ret = dao.saveObs(obs);
@@ -299,43 +311,46 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	}
 
 	/**
-	 * What the finalization policy that applies to an obs says to do with it, or null when no policy
-	 * applies.
+	 * Whether an obs must wait, preliminary, for a person to attest it: when the finalization policy
+	 * for the authenticated user's kind of agent requires it, or, where the claim's asserter counts,
+	 * the policy for the asserter's kind. The user making the call always counts, since a caller can
+	 * name any asserter or creator. The Daemon saves obs for the system, from HL7 and scheduled tasks,
+	 * and is no agent of its own.
 	 */
-	private ObsFinalizationPolicy.Action finalizationActionFor(Obs obs) {
+	private boolean requiresAttestation(Obs obs, boolean asserterCounts) {
 		return dao.withoutAutoFlush(() -> {
-			UserType agentType = agentTypeFor(obs);
-			if (agentType == null) {
-				return null;
-			}
 			ConceptClass conceptClass = obs.getConcept() != null ? obs.getConcept().getConceptClass() : null;
-			ObsFinalizationPolicy policy = dao.getObsFinalizationPolicy(agentType, conceptClass);
-			return policy != null ? policy.getAction() : null;
+			User user = Context.getAuthenticatedUser();
+			if (user != null && !Daemon.isDaemonUser(user) && requiresAttestation(user.getUserType(), conceptClass)) {
+				return true;
+			}
+			return asserterCounts && requiresAttestation(agentTypeOf(obs.getAsserter()), conceptClass);
 		});
 	}
 
+	private boolean requiresAttestation(UserType agentType, ConceptClass conceptClass) {
+		ObsFinalizationPolicy policy = agentType != null ? getObsFinalizationPolicy(agentType, conceptClass) : null;
+		return policy != null && policy.getAction() == ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION;
+	}
+
 	/**
-	 * The kind of agent that made the claim an obs records: its asserter's, or, when the asserter is
-	 * unknown, the kind of user that entered it. The Daemon enters obs for the system, from HL7 and
-	 * scheduled tasks, and is no agent of its own, so its obs keep the status they are given.
+	 * The kind of agent a provider is: its user's type, or a person's for a provider without a user.
 	 */
-	private UserType agentTypeFor(Obs obs) {
-		Provider asserter = obs.getAsserter();
-		if (asserter != null) {
-			if (asserter.getProviderId() != null) {
-				try {
-					Context.addProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
-					// a caller may set an asserter that carries only its id
-					asserter = Context.getProviderService().getProvider(asserter.getProviderId());
-				} finally {
-					Context.removeProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
-				}
-			}
-			User user = asserter != null ? asserter.getUser() : null;
-			return user != null ? user.getUserType() : UserType.HUMAN;
+	private UserType agentTypeOf(Provider asserter) {
+		if (asserter == null) {
+			return null;
 		}
-		User creator = loadUser(obs.getCreator() != null ? obs.getCreator() : Context.getAuthenticatedUser());
-		return creator == null || Daemon.isDaemonUser(creator) ? null : creator.getUserType();
+		if (asserter.getProviderId() != null) {
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+				// a caller may set an asserter that carries only its id
+				asserter = Context.getProviderService().getProvider(asserter.getProviderId());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+			}
+		}
+		User user = asserter != null ? asserter.getUser() : null;
+		return user != null ? user.getUserType() : UserType.HUMAN;
 	}
 
 	/**
@@ -348,9 +363,7 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 			return;
 		}
 		if (Obs.Status.ENTERED_IN_ERROR.equals(obs.getStatus())) {
-			obs.setStatus(
-			    finalizationActionFor(obs) == ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION ? Obs.Status.PRELIMINARY
-			            : Obs.Status.FINAL);
+			obs.setStatus(requiresAttestation(obs, true) ? Obs.Status.PRELIMINARY : Obs.Status.FINAL);
 		}
 		if (obs.hasGroupMembers()) {
 			for (Obs member : obs.getGroupMembers()) {
@@ -883,12 +896,15 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		if (Obs.class.equals(type)) {
 			return (T) getObsByUuid(uuid);
 		}
+		if (ObsFinalizationPolicy.class.equals(type)) {
+			return (T) getObsFinalizationPolicyByUuid(uuid);
+		}
 		throw new APIException("Unsupported type for getRefByUuid: " + type != null ? type.getName() : "null");
 	}
 
 	@Override
 	public List<Class<?>> getRefTypes() {
-		return Arrays.asList(Obs.class);
+		return Arrays.asList(Obs.class, ObsFinalizationPolicy.class);
 	}
 
 	/**
@@ -934,7 +950,18 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	@Override
 	@Transactional(readOnly = true)
 	public ObsFinalizationPolicy getObsFinalizationPolicy(UserType agentType, ConceptClass conceptClass) {
-		return dao.getObsFinalizationPolicy(agentType, conceptClass);
+		// the handful of policies come from the query cache, so saving an obs costs no query for them
+		ObsFinalizationPolicy forEveryClass = null;
+		for (ObsFinalizationPolicy policy : dao.getAllObsFinalizationPolicies(false)) {
+			if (policy.getAgentType() == agentType) {
+				if (policy.getConceptClass() == null) {
+					forEveryClass = policy;
+				} else if (policy.getConceptClass().equals(conceptClass)) {
+					return policy;
+				}
+			}
+		}
+		return forEveryClass;
 	}
 
 	/**
@@ -958,6 +985,6 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 */
 	@Override
 	public ObsFinalizationPolicy unretireObsFinalizationPolicy(ObsFinalizationPolicy policy) {
-		return Context.getObsService().saveObsFinalizationPolicy(policy);
+		return dao.saveObsFinalizationPolicy(policy);
 	}
 }

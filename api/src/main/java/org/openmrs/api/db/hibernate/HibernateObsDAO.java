@@ -30,7 +30,6 @@ import org.hibernate.SessionFactory;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.openmrs.Concept;
-import org.openmrs.ConceptClass;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
@@ -40,7 +39,6 @@ import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.Provider;
 import org.openmrs.User;
-import org.openmrs.UserType;
 import org.openmrs.Visit;
 import org.openmrs.api.db.DAOException;
 import org.openmrs.api.db.ObsDAO;
@@ -546,22 +544,7 @@ public class HibernateObsDAO implements ObsDAO {
 	public List<ObsFinalizationPolicy> getAllObsFinalizationPolicies(boolean includeRetired) {
 		String hql = "from ObsFinalizationPolicy" + (includeRetired ? "" : " where retired = false")
 		        + " order by obsFinalizationPolicyId";
-		return sessionFactory.getCurrentSession().createQuery(hql, ObsFinalizationPolicy.class).list();
-	}
-
-	/**
-	 * @see org.openmrs.api.db.ObsDAO#getObsFinalizationPolicy(UserType, ConceptClass)
-	 */
-	@Override
-	public ObsFinalizationPolicy getObsFinalizationPolicy(UserType agentType, ConceptClass conceptClass) {
-		// the concept class's own policy first, then the one for every class
-		List<ObsFinalizationPolicy> policies = sessionFactory.getCurrentSession()
-		        .createQuery("from ObsFinalizationPolicy where retired = false and agentType = :agentType"
-		                + " and (conceptClass is null or conceptClass = :conceptClass)"
-		                + " order by case when conceptClass is null then 1 else 0 end",
-		            ObsFinalizationPolicy.class)
-		        .setParameter("agentType", agentType).setParameter("conceptClass", conceptClass).setMaxResults(1).list();
-		return policies.isEmpty() ? null : policies.get(0);
+		return sessionFactory.getCurrentSession().createQuery(hql, ObsFinalizationPolicy.class).setCacheable(true).list();
 	}
 
 	/**
