@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.DeviceAgent;
+import org.openmrs.Location;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
@@ -1009,5 +1011,57 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 	@Transactional(readOnly = true)
 	public List<SoftwareAgent> getSoftwareAgentVersions(String name) {
 		return dao.getSoftwareAgentVersions(name);
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#createDeviceAgent(DeviceAgent, String)
+	 */
+	@Override
+	public DeviceAgent createDeviceAgent(DeviceAgent agent, String password) throws APIException {
+		User user = agent.getUser();
+		if (user == null || user.getUserId() != null) {
+			throw new APIException("A device agent is created with a new user");
+		}
+		if (StringUtils.isBlank(agent.getIdentifier())) {
+			throw new APIException("A device agent needs an identifier");
+		}
+		if (dao.getDeviceAgentByIdentifier(agent.getIdentifier()) != null) {
+			throw new APIException("Device " + agent + " already exists");
+		}
+
+		user.setUserType(UserType.DEVICE);
+		Context.getUserService().createUser(user, password);
+		return dao.saveDeviceAgent(agent);
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#moveDeviceAgent(User, Location)
+	 */
+	@Override
+	public DeviceAgent moveDeviceAgent(User device, Location location) throws APIException {
+		DeviceAgent agent = dao.getDeviceAgent(device);
+		if (agent == null) {
+			throw new APIException("User " + device + " has no device agent");
+		}
+		agent.setLocation(location);
+		return agent;
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#getDeviceAgent(User)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DeviceAgent getDeviceAgent(User user) {
+		return dao.getDeviceAgent(user);
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#getDeviceAgentByIdentifier(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DeviceAgent getDeviceAgentByIdentifier(String identifier) {
+		return dao.getDeviceAgentByIdentifier(identifier);
 	}
 }

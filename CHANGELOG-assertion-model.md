@@ -22,3 +22,9 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
 - `UserService.createSoftwareAgent(agent, password)` creates the SOFTWARE user and its agent together, so every
   software user created this way has one; `getSoftwareAgent(User)` and `getSoftwareAgentVersions(name)` read them.
   `User` has no link to its software agent, so loading a user never loads one.
+- `device_agent` (`user_id` PK/FK users, `identifier` unique, `location_id` FK location), mapped as
+  `org.openmrs.DeviceAgent`. `UserService.createDeviceAgent(agent, password)` creates the DEVICE user and its agent
+  together. The identifier is the implementation's own identifier for the device, the one its messages carry; it never
+  changes (no setter, not updatable). The location is where the device is now: `moveDeviceAgent(device, location)`
+  changes only that, authorized by the device's user id. Devices are not versioned: new firmware is not a new device.
+  `getDeviceAgent(User)` and `getDeviceAgentByIdentifier(identifier)` read them.

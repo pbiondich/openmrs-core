@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.openmrs.DeviceAgent;
+import org.openmrs.Location;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
@@ -792,4 +794,58 @@ public interface UserService extends OpenmrsService {
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_USERS + "')")
 	@PostFilter("hasPermission(filterObject.user, '" + PrivilegeConstants.GET_USERS + "')")
 	List<SoftwareAgent> getSoftwareAgentVersions(String name);
+
+	/**
+	 * Creates a device user and the {@link DeviceAgent} that describes it, together. The device's
+	 * identifier never changes afterwards; its location changes with
+	 * {@link #moveDeviceAgent(User, Location)}.
+	 *
+	 * @param agent the device agent to create; its user must be new, and is created as a
+	 *            {@link org.openmrs.UserType#DEVICE} user
+	 * @param password the new user's password
+	 * @return the created device agent
+	 * @throws APIException if the user is already saved, or the identifier is blank or already used
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasPermission(#agent.user, '" + PrivilegeConstants.ADD_USERS + "')")
+	@Logging(ignoredArgumentIndexes = { 1 })
+	DeviceAgent createDeviceAgent(DeviceAgent agent, String password) throws APIException;
+
+	/**
+	 * Records that a device has moved. Nothing else about the device changes.
+	 *
+	 * @param device a device user
+	 * @param location where the device is now, or null if that is not recorded
+	 * @return the device's agent with its new location
+	 * @throws APIException if the user has no device agent
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasPermission(#device?.userId, 'User', '" + PrivilegeConstants.EDIT_USERS + "')")
+	DeviceAgent moveDeviceAgent(User device, Location location) throws APIException;
+
+	/**
+	 * @param user the user to look up
+	 * @return the device agent that describes the user, or null if there is none
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasPermission(#user, '" + PrivilegeConstants.GET_USERS + "')")
+	@PostAuthorize("hasPermission(returnObject?.user, '" + PrivilegeConstants.GET_USERS + "')")
+	DeviceAgent getDeviceAgent(User user);
+
+	/**
+	 * @param identifier the identifier that names a device
+	 * @return the device agent with that identifier, or null if there is none
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_USERS + "')")
+	@PostAuthorize("hasPermission(returnObject?.user, '" + PrivilegeConstants.GET_USERS + "')")
+	DeviceAgent getDeviceAgentByIdentifier(String identifier);
 }

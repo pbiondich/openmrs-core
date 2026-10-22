@@ -9,6 +9,7 @@
  */
 package org.openmrs.api;
 
+import java.lang.reflect.Field;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.openmrs.DeviceAgent;
+import org.openmrs.Location;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
@@ -254,6 +257,90 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 		User user = new User();
 		user.setUsername(name + "-" + version);
 		return new SoftwareAgent(user, name, version);
+	}
+
+	@Test
+	public void createDeviceAgent_shouldCreateADeviceUserWithoutAPersonAndItsAgent() {
+		Location ward = Context.getLocationService().getLocation(1);
+		DeviceAgent agent = newDeviceAgent("SN-1001");
+		agent.setLocation(ward);
+		userService.createDeviceAgent(agent, "Openmr5xy");
+
+		Context.flushSession();
+		Context.clearSession();
+
+		User user = userService.getUserByUsername("device-SN-1001");
+		assertEquals(UserType.DEVICE, user.getUserType());
+		assertNull(user.getPerson());
+		DeviceAgent saved = userService.getDeviceAgent(user);
+		assertEquals("SN-1001", saved.getIdentifier());
+		assertEquals(ward.getLocationId(), saved.getLocation().getLocationId());
+		assertEquals(saved.getUserId(), userService.getDeviceAgentByIdentifier("SN-1001").getUserId());
+	}
+
+	@Test
+	public void createDeviceAgent_shouldRefuseAnIdentifierThatIsUsed() {
+		userService.createDeviceAgent(newDeviceAgent("SN-1001"), "Openmr5xy");
+		DeviceAgent again = new DeviceAgent(new User(), "SN-1001");
+		again.getUser().setUsername("device-again");
+
+		assertThrows(APIException.class, () -> userService.createDeviceAgent(again, "Openmr5xy"));
+	}
+
+	@Test
+	public void createDeviceAgent_shouldRefuseASavedUser() {
+		DeviceAgent agent = new DeviceAgent(userService.getUser(502), "SN-1001");
+		assertThrows(APIException.class, () -> userService.createDeviceAgent(agent, "Openmr5xy"));
+	}
+
+	@Test
+	public void createDeviceAgent_shouldRefuseABlankIdentifier() {
+		assertThrows(APIException.class, () -> userService.createDeviceAgent(newDeviceAgent(" "), "Openmr5xy"));
+	}
+
+	@Test
+	public void createDeviceAgent_shouldCreateAnAgentWhoseIdentifierNeverChanges() throws Exception {
+		userService.createDeviceAgent(newDeviceAgent("SN-1001"), "Openmr5xy");
+		Context.flushSession();
+
+		// there is no setter; reach the field the way a bug or a careless module could
+		DeviceAgent saved = userService.getDeviceAgentByIdentifier("SN-1001");
+		Field identifier = DeviceAgent.class.getDeclaredField("identifier");
+		identifier.setAccessible(true);
+		identifier.set(saved, "SN-9999");
+		Context.flushSession();
+		Context.clearSession();
+
+		assertNotNull(userService.getDeviceAgentByIdentifier("SN-1001"));
+		assertNull(userService.getDeviceAgentByIdentifier("SN-9999"));
+	}
+
+	@Test
+	public void moveDeviceAgent_shouldChangeTheLocation() {
+		DeviceAgent agent = userService.createDeviceAgent(newDeviceAgent("SN-1001"), "Openmr5xy");
+		Location ward = Context.getLocationService().getLocation(2);
+		userService.moveDeviceAgent(agent.getUser(), ward);
+		Context.flushSession();
+		Context.clearSession();
+
+		assertEquals(ward.getLocationId(), userService.getDeviceAgentByIdentifier("SN-1001").getLocation().getLocationId());
+	}
+
+	@Test
+	public void moveDeviceAgent_shouldRefuseAUserWithoutADeviceAgent() {
+		Location ward = Context.getLocationService().getLocation(2);
+		assertThrows(APIException.class, () -> userService.moveDeviceAgent(userService.getUser(502), ward));
+	}
+
+	@Test
+	public void getDeviceAgent_shouldReturnNullForAUserWithoutOne() {
+		assertNull(userService.getDeviceAgent(userService.getUser(502)));
+	}
+
+	private DeviceAgent newDeviceAgent(String identifier) {
+		User user = new User();
+		user.setUsername("device-" + identifier);
+		return new DeviceAgent(user, identifier);
 	}
 
 	@Test

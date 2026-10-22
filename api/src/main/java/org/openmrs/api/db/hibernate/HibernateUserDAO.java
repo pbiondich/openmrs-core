@@ -30,6 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.hibernate.FlushMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
+import org.openmrs.DeviceAgent;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -817,5 +818,35 @@ public class HibernateUserDAO implements UserDAO {
 		return sessionFactory.getCurrentSession()
 		        .createQuery("from SoftwareAgent where name = :name order by userId", SoftwareAgent.class)
 		        .setParameter("name", name).getResultList();
+	}
+
+	/**
+	 * @see UserDAO#saveDeviceAgent(DeviceAgent)
+	 */
+	@Override
+	public DeviceAgent saveDeviceAgent(DeviceAgent agent) {
+		sessionFactory.getCurrentSession().persist(agent);
+		return agent;
+	}
+
+	/**
+	 * @see UserDAO#getDeviceAgent(User)
+	 */
+	@Override
+	public DeviceAgent getDeviceAgent(User user) {
+		if (user == null || user.getUserId() == null) {
+			return null;
+		}
+		return sessionFactory.getCurrentSession().get(DeviceAgent.class, user.getUserId());
+	}
+
+	/**
+	 * @see UserDAO#getDeviceAgentByIdentifier(String)
+	 */
+	@Override
+	public DeviceAgent getDeviceAgentByIdentifier(String identifier) {
+		return sessionFactory.getCurrentSession()
+		        .createQuery("from DeviceAgent where identifier = :identifier", DeviceAgent.class)
+		        .setParameter("identifier", identifier).uniqueResult();
 	}
 }
