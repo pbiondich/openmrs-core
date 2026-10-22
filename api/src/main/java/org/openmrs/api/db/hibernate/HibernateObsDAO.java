@@ -517,6 +517,18 @@ public class HibernateObsDAO implements ObsDAO {
 	}
 
 	/**
+	 * @see org.openmrs.api.db.ObsDAO#hasNewerVersion(org.openmrs.Obs)
+	 */
+	@Override
+	public boolean hasNewerVersion(Obs obs) {
+		// the schema does not make previous_version unique, so an old version that was unvoided and
+		// edited again can have more than one newer version
+		return !sessionFactory.getCurrentSession()
+		        .createQuery("select o.obsId from Obs o where o.previousVersion = :obs", Integer.class)
+		        .setParameter("obs", obs).setMaxResults(1).list().isEmpty();
+	}
+
+	/**
 	 * @see org.openmrs.api.db.ObsDAO#getSavedStatus(org.openmrs.Obs)
 	 */
 	@Override

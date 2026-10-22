@@ -761,6 +761,17 @@ public class ObsTest {
 		}
 	}
 
+	@Test
+	public void isDirty_shouldReturnFalseWhenTheStatusEntersOrLeavesEnteredInError() {
+		Obs obs = new Obs(5);
+		obs.setStatus(Obs.Status.ENTERED_IN_ERROR);
+		obs.setStatus(Obs.Status.FINAL);
+		assertFalse(obs.isDirty());
+
+		obs.setStatus(Obs.Status.PRELIMINARY);
+		assertTrue(obs.isDirty());
+	}
+
 	/**
 	 * @see Obs#isDirty()
 	 */

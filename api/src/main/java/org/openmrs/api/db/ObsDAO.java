@@ -82,6 +82,13 @@ public interface ObsDAO {
 	public Obs getRevisionObs(Obs initialObs);
 
 	/**
+	 * @param obs a saved obs
+	 * @return true if a newer version of the obs has been saved, one whose previous version it is
+	 * @since 3.0.0
+	 */
+	public boolean hasNewerVersion(Obs obs);
+
+	/**
 	 * Gets the value of status currently saved in the database for the given obs, bypassing any caches.
 	 * This is used when the user updates an existing obs so we can determine whether to change its
 	 * status or not.

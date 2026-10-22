@@ -2233,6 +2233,108 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 		assertEquals(List.of(bySecond), obsService.getObservationsByAsserter(second, null, null));
 	}
 
+	@Test
+	public void voidObs_shouldMarkTheObsEnteredInError() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+
+		Context.getObsService().voidObs(obs, "wrong patient");
+
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, reload(obs).getStatus());
+	}
+
+	@Test
+	public void voidObs_shouldMarkTheMembersOfAGroupEnteredInError() {
+		Obs parent = newObsInEncounter();
+		parent.setConcept(Context.getConceptService().getConcept(23));
+		parent.setValueNumeric(null);
+		Obs member = newObsInEncounter();
+		parent.addGroupMember(member);
+		parent = saveAndReload(parent, null);
+
+		Context.getObsService().voidObs(parent, "wrong patient");
+
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, reload(parent).getGroupMembers(true).iterator().next().getStatus());
+	}
+
+	@Test
+	public void voidObs_shouldNotMarkAVersionANewerOneReplacedEnteredInError() {
+		Obs saved = saveAndReload(newObsInEncounter(), null);
+
+		saved.setValueNumeric(51d);
+		Obs edited = Context.getObsService().saveObs(saved, "corrected");
+
+		assertEquals(Obs.Status.AMENDED, edited.getStatus());
+		Obs replaced = reload(saved);
+		assertTrue(replaced.getVoided());
+		assertEquals(Obs.Status.FINAL, replaced.getStatus());
+	}
+
+	@Test
+	public void unvoidObs_shouldPutAnObsEnteredInErrorBackToFinalOnTheSameRow() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+		Context.getObsService().voidObs(obs, "wrong patient");
+		obs = reload(obs);
+
+		Obs unvoided = Context.getObsService().unvoidObs(obs);
+
+		assertEquals(obs.getObsId(), unvoided.getObsId());
+		Obs current = reload(obs);
+		assertFalse(current.getVoided());
+		assertEquals(Obs.Status.FINAL, current.getStatus());
+	}
+
+	@Test
+	public void voidEncounter_shouldMarkItsObsEnteredInErrorAndUnvoidObsShouldPutThemBack() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+		EncounterService encounterService = Context.getEncounterService();
+		encounterService.voidEncounter(encounterService.getEncounter(3), "wrong patient");
+		obs = reload(obs);
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, obs.getStatus());
+
+		Context.getObsService().unvoidObs(obs);
+
+		Obs current = reload(obs);
+		assertFalse(current.getVoided());
+		assertEquals(Obs.Status.FINAL, current.getStatus());
+		assertNull(Context.getObsService().getRevisionObs(current));
+	}
+
+	@Test
+	public void saveObs_shouldPutAnObsUnvoidedByClearingItsVoidedFlagBackToFinal() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+		Context.getObsService().voidObs(obs, "wrong patient");
+		obs = reload(obs);
+
+		obs.setVoided(false);
+		Context.getObsService().saveObs(obs, "unvoided");
+
+		Obs current = reload(obs);
+		assertFalse(current.getVoided());
+		assertEquals(Obs.Status.FINAL, current.getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldNotLetALiveObsBeMarkedEnteredInError() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+
+		obs.setStatus(Obs.Status.ENTERED_IN_ERROR);
+		Context.getObsService().saveObs(obs, "not voided");
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	private Obs newObsInEncounter() {
+		Obs obs = newNumericObs();
+		obs.setPerson(Context.getEncounterService().getEncounter(3).getPatient());
+		return obs;
+	}
+
+	private Obs reload(Obs obs) {
+		Context.flushSession();
+		Context.clearSession();
+		return Context.getObsService().getObs(obs.getObsId());
+	}
+
 	private Obs newNumericObs() {
 		Obs obs = new Obs();
 		obs.setConcept(Context.getConceptService().getConcept(3));

@@ -48,3 +48,9 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   devices auto-finalize.
 - The Daemon user no longer has a person. It shared person 1 with the admin user only because `users.person_id` used
   to be required; rolling back gives it person 1 again.
+- `Obs.Status.ENTERED_IN_ERROR`: `ObsService.voidObs` marks the obs, and the members of a group voided with it, as
+  entered in error, unless a newer version replaced it (that void is how an edit is saved, and the old version keeps
+  its status). Unvoiding it, through `unvoidObs` or by saving it with `voided` cleared, puts it back to `FINAL` on
+  the same row; the status it had before is not kept. Entering or leaving the status does not make an obs dirty, and
+  the obs interceptor allows only that one change on an obs that is not voided. No schema change: `obs.status` is
+  already `varchar(16)`. Obs voided before this change are not backfilled, since their status would be lost.

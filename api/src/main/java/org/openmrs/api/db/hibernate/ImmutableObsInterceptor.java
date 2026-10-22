@@ -9,6 +9,7 @@
  */
 package org.openmrs.api.db.hibernate;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.openmrs.Obs;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +41,29 @@ public class ImmutableObsInterceptor extends ImmutableEntityInterceptor {
 	@Override
 	protected String[] getMutablePropertyNames() {
 		return MUTABLE_PROPERTY_NAMES;
+	}
+
+	/**
+	 * Lets the status go from {@link Obs.Status#ENTERED_IN_ERROR} back to {@link Obs.Status#FINAL} as
+	 * the obs is unvoided, and to nothing else. Marking it entered in error needs nothing here, since
+	 * changes to an obs that is voided are ignored.
+	 * <p>
+	 * <strong>Should</strong> allow an entered in error obs to go back to final as it is unvoided<br/>
+	 * <strong>Should</strong> not allow an entered in error obs to take another status<br/>
+	 * <strong>Should</strong> not allow the status of an obs that was not voided to change
+	 *
+	 * @see ImmutableEntityInterceptor#isAllowedChange(String, Object[], Object[], String[])
+	 */
+	@Override
+	protected boolean isAllowedChange(String property, Object[] currentState, Object[] previousState,
+	        String[] propertyNames) {
+		if (!"status".equals(property) || previousState == null) {
+			return false;
+		}
+		int status = ArrayUtils.indexOf(propertyNames, "status");
+		int voided = ArrayUtils.indexOf(propertyNames, "voided");
+		return Obs.Status.ENTERED_IN_ERROR.equals(previousState[status]) && Obs.Status.FINAL.equals(currentState[status])
+		        && Boolean.TRUE.equals(previousState[voided]) && Boolean.FALSE.equals(currentState[voided]);
 	}
 
 	/**

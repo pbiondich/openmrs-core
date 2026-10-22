@@ -95,7 +95,14 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 	public enum Status {
 		PRELIMINARY,
 		FINAL,
-		AMENDED
+		AMENDED,
+		/**
+		 * The obs was voided as a mistake, not replaced by a newer version: what it claims should not have
+		 * been recorded. Set when the obs is voided and cleared when it is unvoided.
+		 *
+		 * @since 3.0.0
+		 */
+		ENTERED_IN_ERROR
 	}
 
 	private static final String TIME_PATTERN = "HH:mm";
@@ -1320,10 +1327,15 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 	}
 
 	/**
+	 * Entering or leaving {@link Status#ENTERED_IN_ERROR} goes with voiding and unvoiding, which change
+	 * the row in place, so like the voided properties it does not make this obs dirty.
+	 *
 	 * @since 2.1.0
 	 */
 	public void setStatus(Status status) {
-		markAsDirty(this.status, status);
+		if (this.status != Status.ENTERED_IN_ERROR && status != Status.ENTERED_IN_ERROR) {
+			markAsDirty(this.status, status);
+		}
 		this.status = status;
 	}
 

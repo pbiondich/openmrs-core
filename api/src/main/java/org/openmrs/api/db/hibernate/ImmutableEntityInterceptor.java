@@ -96,7 +96,8 @@ public abstract class ImmutableEntityInterceptor implements Interceptor {
 
 				Object previousValue = (previousState != null) ? previousState[i] : null;
 				Object currentValue = (currentState != null) ? currentState[i] : null;
-				if (!OpenmrsUtil.nullSafeEquals(currentValue, previousValue)) {
+				if (!OpenmrsUtil.nullSafeEquals(currentValue, previousValue)
+				        && !isAllowedChange(property, currentState, previousState, propertyNames)) {
 					if (changedProperties == null) {
 						changedProperties = new ArrayList<>();
 					}
@@ -111,6 +112,18 @@ public abstract class ImmutableEntityInterceptor implements Interceptor {
 			}
 		}
 
+		return false;
+	}
+
+	/**
+	 * Subclasses can override this to let a property that is otherwise immutable change in a particular
+	 * transition, judged from the whole of the entity's previous and current state.
+	 *
+	 * @return true if this change to the given property is allowed
+	 * @since 3.0.0
+	 */
+	protected boolean isAllowedChange(String property, Object[] currentState, Object[] previousState,
+	        String[] propertyNames) {
 		return false;
 	}
 
