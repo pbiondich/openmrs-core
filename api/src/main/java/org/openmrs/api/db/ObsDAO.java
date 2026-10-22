@@ -14,12 +14,15 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import org.openmrs.Concept;
+import org.openmrs.ConceptClass;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.Person;
 import org.openmrs.Provider;
+import org.openmrs.UserType;
 import org.openmrs.Visit;
 import org.openmrs.api.ObsService;
 import org.openmrs.parameter.ObsSearchCriteria;
@@ -87,6 +90,26 @@ public interface ObsDAO {
 	 * @since 3.0.0
 	 */
 	public boolean hasNewerVersion(Obs obs);
+
+	/**
+	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicyByUuid(String)
+	 */
+	public ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid);
+
+	/**
+	 * @see org.openmrs.api.ObsService#getAllObsFinalizationPolicies(boolean)
+	 */
+	public List<ObsFinalizationPolicy> getAllObsFinalizationPolicies(boolean includeRetired);
+
+	/**
+	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicy(UserType, ConceptClass)
+	 */
+	public ObsFinalizationPolicy getObsFinalizationPolicy(UserType agentType, ConceptClass conceptClass);
+
+	/**
+	 * @see org.openmrs.api.ObsService#saveObsFinalizationPolicy(ObsFinalizationPolicy)
+	 */
+	public ObsFinalizationPolicy saveObsFinalizationPolicy(ObsFinalizationPolicy policy);
 
 	/**
 	 * Gets the value of status currently saved in the database for the given obs, bypassing any caches.

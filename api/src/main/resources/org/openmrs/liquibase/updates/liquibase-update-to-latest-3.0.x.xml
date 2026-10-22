@@ -365,4 +365,78 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p2-obs-finalization-policy-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="obs_finalization_policy"/>
+			</not>
+		</preConditions>
+		<comment>
+			Policies that say whether the obs a kind of agent asserts are final when saved or wait, preliminary, for a
+			person to attest them; a policy for a concept class takes precedence over the agent type's policy for every
+			class. Devices auto-finalize and software needs attestation
+		</comment>
+		<createTable tableName="obs_finalization_policy">
+			<column name="obs_finalization_policy_id" autoIncrement="true" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="name" type="VARCHAR(255)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="description" type="VARCHAR(1024)"/>
+			<column name="agent_type" type="VARCHAR(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="concept_class_id" type="INT"/>
+			<column name="action" type="VARCHAR(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="creator" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_created" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="changed_by" type="INT"/>
+			<column name="date_changed" type="DATETIME"/>
+			<column name="retired" type="BOOLEAN" defaultValueBoolean="false">
+				<constraints nullable="false"/>
+			</column>
+			<column name="retired_by" type="INT"/>
+			<column name="date_retired" type="DATETIME"/>
+			<column name="retire_reason" type="VARCHAR(255)"/>
+			<column name="uuid" type="CHAR(38)">
+				<constraints nullable="false" unique="true"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="obs_finalization_policy" baseColumnNames="concept_class_id"
+			constraintName="obs_finalization_policy_concept_class" referencedTableName="concept_class"
+			referencedColumnNames="concept_class_id"/>
+		<addForeignKeyConstraint baseTableName="obs_finalization_policy" baseColumnNames="creator"
+			constraintName="obs_finalization_policy_creator" referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="obs_finalization_policy" baseColumnNames="changed_by"
+			constraintName="obs_finalization_policy_changed_by" referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="obs_finalization_policy" baseColumnNames="retired_by"
+			constraintName="obs_finalization_policy_retired_by" referencedTableName="users" referencedColumnNames="user_id"/>
+		<insert tableName="obs_finalization_policy">
+			<column name="name" value="Devices finalize their own obs"/>
+			<column name="agent_type" value="DEVICE"/>
+			<column name="action" value="AUTO_FINAL"/>
+			<column name="creator" valueNumeric="1"/>
+			<column name="date_created" valueDate="2026-10-22T00:00:00"/>
+			<column name="uuid" value="9b7f4a2e-3c1d-4e8a-9f6b-2d5c8e1a7b30"/>
+		</insert>
+		<insert tableName="obs_finalization_policy">
+			<column name="name" value="Software obs need attestation"/>
+			<column name="agent_type" value="SOFTWARE"/>
+			<column name="action" value="REQUIRE_ATTESTATION"/>
+			<column name="creator" valueNumeric="1"/>
+			<column name="date_created" valueDate="2026-10-22T00:00:00"/>
+			<column name="uuid" value="4e2c9d81-7a5b-4f3e-8c6d-1b9a0e2f5d47"/>
+		</insert>
+		<rollback>
+			<dropTable tableName="obs_finalization_policy"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

@@ -37,12 +37,14 @@ import org.hibernate.stat.Statistics;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
+import org.openmrs.ConceptClass;
 import org.openmrs.ConceptName;
 import org.openmrs.ConceptProposal;
 import org.openmrs.ConceptReferenceRange;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.ObsReferenceRange;
 import org.openmrs.Order;
 import org.openmrs.Patient;
@@ -51,6 +53,7 @@ import org.openmrs.Provider;
 import org.openmrs.ProviderType;
 import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.Visit;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.ObsServiceImpl;
@@ -2321,6 +2324,112 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 		Context.getObsService().saveObs(obs, "not voided");
 
 		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldSaveAnObsPreliminaryWhenItsPolicyRequiresAttestation() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldPreferTheConceptClassesPolicyToTheAgentTypes() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		Context.getObsService().saveObsFinalizationPolicy(new ObsFinalizationPolicy("drugs are final", UserType.SOFTWARE,
+		        obs.getConcept().getConceptClass(), ObsFinalizationPolicy.Action.AUTO_FINAL));
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldKeepTheStatusAnObsIsSavedWithWhenNoPolicyApplies() {
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldGoByTheCreatorsTypeWhenTheAsserterIsUnknown() {
+		requireAttestation(UserType.SOFTWARE, null);
+		User user = new User();
+		user.setUsername("transcriber-0.1");
+		Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, "transcriber", "0.1"), "Openmr5xy");
+		Obs obs = newObsInEncounter();
+		obs.setCreator(user);
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertNull(obs.getAsserter());
+		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldNotApplyPoliciesToObsTheDaemonEnters() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		obs.setCreator(Context.getUserService().getUserByUuid("A4F30A1B-5EB9-11DF-A648-37A07F9C90FB"));
+
+		Context.getObsService().saveObs(obs, null);
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void saveObs_shouldNotFinalizeAnObsWaitingForAttestationWhenItIsEdited() {
+		requireAttestation(UserType.SOFTWARE, null);
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+		obs = saveAndReload(obs, obs.getAsserter());
+
+		obs.setValueNumeric(51d);
+		obs.setStatus(Obs.Status.FINAL);
+		Obs edited = Context.getObsService().saveObs(obs, "corrected");
+
+		assertEquals(Obs.Status.PRELIMINARY, reload(edited).getStatus());
+	}
+
+	@Test
+	public void unvoidObs_shouldPutAnObsWhosePolicyRequiresAttestationBackToPreliminary() {
+		Obs obs = newObsInEncounter();
+		obs.setAsserter(newDigitalProvider("extractor", "0.1"));
+		obs = saveAndReload(obs, obs.getAsserter());
+		Context.getObsService().voidObs(obs, "wrong patient");
+		obs = reload(obs);
+		requireAttestation(UserType.SOFTWARE, null);
+
+		Context.getObsService().unvoidObs(obs);
+
+		assertEquals(Obs.Status.PRELIMINARY, reload(obs).getStatus());
+	}
+
+	@Test
+	public void getObsFinalizationPolicy_shouldIgnoreRetiredPolicies() {
+		ObsService obsService = Context.getObsService();
+		ObsFinalizationPolicy policy = requireAttestation(UserType.SOFTWARE, null);
+		ConceptClass drug = Context.getConceptService().getConceptClass(3);
+		assertEquals(policy, obsService.getObsFinalizationPolicy(UserType.SOFTWARE, drug));
+
+		obsService.retireObsFinalizationPolicy(policy, "no longer needed");
+
+		assertNull(obsService.getObsFinalizationPolicy(UserType.SOFTWARE, drug));
+		assertNull(obsService.getObsFinalizationPolicy(UserType.DEVICE, drug));
+	}
+
+	private ObsFinalizationPolicy requireAttestation(UserType agentType, ConceptClass conceptClass) {
+		return Context.getObsService().saveObsFinalizationPolicy(new ObsFinalizationPolicy(agentType + " needs attestation",
+		        agentType, conceptClass, ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION));
 	}
 
 	private Obs newObsInEncounter() {

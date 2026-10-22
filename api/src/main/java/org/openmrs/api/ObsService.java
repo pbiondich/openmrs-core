@@ -14,12 +14,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.Concept;
+import org.openmrs.ConceptClass;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.Person;
 import org.openmrs.Provider;
+import org.openmrs.UserType;
 import org.openmrs.Visit;
 import org.openmrs.api.db.ObsDAO;
 import org.openmrs.obs.ComplexObsHandler;
@@ -165,12 +168,14 @@ public interface ObsService extends OpenmrsService {
 	public Obs voidObs(Obs obs, String reason) throws APIException;
 
 	/**
-	 * Revive an observation (pull a Lazarus). An obs that was entered in error goes back to
-	 * {@link Obs.Status#FINAL}; the status it had before it was voided is not kept.
+	 * Revive an observation (pull a Lazarus). An obs that was entered in error gets the status a new
+	 * obs would: {@link Obs.Status#FINAL}, or {@link Obs.Status#PRELIMINARY} if its finalization policy
+	 * requires attestation. The status it had before it was voided is not kept.
 	 * <p>
 	 * <strong>Should</strong> unset voided bit on given obs<br/>
 	 * <strong>Should</strong> cascade unvoid to child grouped obs<br/>
-	 * <strong>Should</strong> put an obs entered in error back to final on the same row
+	 * <strong>Should</strong> put an obs entered in error back to final on the same row<br/>
+	 * <strong>Should</strong> put an obs whose policy requires attestation back to preliminary
 	 *
 	 * @param obs Obs to unvoid
 	 * @throws APIException
@@ -723,4 +728,74 @@ public interface ObsService extends OpenmrsService {
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS + "')")
 	@PostFilter("hasPermission(filterObject, '" + PrivilegeConstants.GET_OBS + "')")
 	List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit);
+
+	/**
+	 * @param uuid the uuid of an obs finalization policy
+	 * @return the policy, or null if there is none with that uuid
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS_FINALIZATION_POLICIES + "')")
+	ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid);
+
+	/**
+	 * @param includeRetired whether to include retired policies
+	 * @return the obs finalization policies
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS_FINALIZATION_POLICIES + "')")
+	List<ObsFinalizationPolicy> getAllObsFinalizationPolicies(boolean includeRetired);
+
+	/**
+	 * The policy that applies to an obs that an agent of the given type asserts about a concept of the
+	 * given class: the policy for that class if there is one, otherwise the agent type's policy for
+	 * every class. Retired policies never apply.
+	 * <p>
+	 * <strong>Should</strong> prefer the concept class's policy to the agent type's<br/>
+	 * <strong>Should</strong> fall back to the agent type's policy for every class<br/>
+	 * <strong>Should</strong> ignore retired policies
+	 *
+	 * @param agentType the kind of agent
+	 * @param conceptClass the concept class, or null
+	 * @return the policy that applies, or null if none does
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_OBS_FINALIZATION_POLICIES + "')")
+	ObsFinalizationPolicy getObsFinalizationPolicy(UserType agentType, ConceptClass conceptClass);
+
+	/**
+	 * @param policy the policy to save
+	 * @return the saved policy
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.MANAGE_OBS_FINALIZATION_POLICIES + "')")
+	ObsFinalizationPolicy saveObsFinalizationPolicy(ObsFinalizationPolicy policy);
+
+	/**
+	 * @param policy the policy to retire, after which it no longer applies to any obs
+	 * @param reason why it is retired
+	 * @return the retired policy
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.MANAGE_OBS_FINALIZATION_POLICIES + "')")
+	ObsFinalizationPolicy retireObsFinalizationPolicy(ObsFinalizationPolicy policy, String reason);
+
+	/**
+	 * @param policy the policy to unretire
+	 * @return the unretired policy
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.MANAGE_OBS_FINALIZATION_POLICIES + "')")
+	ObsFinalizationPolicy unretireObsFinalizationPolicy(ObsFinalizationPolicy policy);
 }
