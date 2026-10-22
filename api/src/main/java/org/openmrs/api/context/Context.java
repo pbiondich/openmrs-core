@@ -36,6 +36,7 @@ import org.openmrs.User;
 import org.openmrs.aop.AOPConfig;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
+import org.openmrs.api.AttestationService;
 import org.openmrs.api.CohortService;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.ConditionService;
@@ -479,6 +480,14 @@ public class Context {
 	 */
 	public static ConditionService getConditionService() {
 		return getServiceContext().getConditionService();
+	}
+
+	/**
+	 * @return attestation-related services
+	 * @since 3.0.0
+	 */
+	public static AttestationService getAttestationService() {
+		return getServiceContext().getAttestationService();
 	}
 
 	/**

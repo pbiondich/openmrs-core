@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.aopalliance.aop.Advice;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
+import org.openmrs.api.AttestationService;
 import org.openmrs.api.CohortService;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.ConditionService;
@@ -234,6 +235,22 @@ public class ServiceContext implements ApplicationContextAware {
 	 */
 	public void setConditionService(ConditionService conditionService) {
 		setService(ConditionService.class, conditionService);
+	}
+
+	/**
+	 * @return attestation related service
+	 * @since 3.0.0
+	 */
+	public AttestationService getAttestationService() {
+		return getService(AttestationService.class);
+	}
+
+	/**
+	 * @param attestationService attestation related service
+	 * @since 3.0.0
+	 */
+	public void setAttestationService(AttestationService attestationService) {
+		setService(AttestationService.class, attestationService);
 	}
 
 	/**

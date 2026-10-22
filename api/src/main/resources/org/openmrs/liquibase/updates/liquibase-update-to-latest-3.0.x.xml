@@ -451,4 +451,101 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p2-obs-attestation-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="obs_attestation"/>
+			</not>
+		</preConditions>
+		<comment>A person's attestation of preliminary obs: who attested, when, and for which encounter</comment>
+		<createTable tableName="obs_attestation">
+			<column name="obs_attestation_id" autoIncrement="true" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="encounter_id" type="INT"/>
+			<column name="attester_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="attested_at" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="creator" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_created" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="changed_by" type="INT"/>
+			<column name="date_changed" type="DATETIME"/>
+			<column name="voided" type="BOOLEAN" defaultValueBoolean="false">
+				<constraints nullable="false"/>
+			</column>
+			<column name="voided_by" type="INT"/>
+			<column name="date_voided" type="DATETIME"/>
+			<column name="void_reason" type="VARCHAR(255)"/>
+			<column name="uuid" type="CHAR(38)">
+				<constraints nullable="false" unique="true"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="obs_attestation" baseColumnNames="encounter_id"
+			constraintName="obs_attestation_encounter" referencedTableName="encounter" referencedColumnNames="encounter_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation" baseColumnNames="attester_id"
+			constraintName="obs_attestation_attester" referencedTableName="provider" referencedColumnNames="provider_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation" baseColumnNames="creator"
+			constraintName="obs_attestation_creator" referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation" baseColumnNames="changed_by"
+			constraintName="obs_attestation_changed_by" referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation" baseColumnNames="voided_by"
+			constraintName="obs_attestation_voided_by" referencedTableName="users" referencedColumnNames="user_id"/>
+		<rollback>
+			<dropTable tableName="obs_attestation"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p2-obs-attestation-item-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="obs_attestation_item"/>
+			</not>
+		</preConditions>
+		<comment>
+			One row per obs an attestation covers, saying what became of it: accepted, rejected, amended (with the obs
+			that supersedes it) or left preliminary. A rejected obs stays preliminary; its item is the only record of
+			the rejection
+		</comment>
+		<createTable tableName="obs_attestation_item">
+			<column name="obs_attestation_item_id" autoIncrement="true" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="obs_attestation_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="obs_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="outcome" type="VARCHAR(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="superseding_obs_id" type="INT"/>
+			<column name="uuid" type="CHAR(38)">
+				<constraints nullable="false" unique="true"/>
+			</column>
+		</createTable>
+		<addUniqueConstraint tableName="obs_attestation_item" columnNames="obs_attestation_id, obs_id"
+			constraintName="obs_attestation_item_obs"/>
+		<createIndex tableName="obs_attestation_item" indexName="obs_attestation_item_obs_idx">
+			<column name="obs_id"/>
+		</createIndex>
+		<addForeignKeyConstraint baseTableName="obs_attestation_item" baseColumnNames="obs_attestation_id"
+			constraintName="obs_attestation_item_attestation" referencedTableName="obs_attestation"
+			referencedColumnNames="obs_attestation_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation_item" baseColumnNames="obs_id"
+			constraintName="obs_attestation_item_obs_id" referencedTableName="obs" referencedColumnNames="obs_id"/>
+		<addForeignKeyConstraint baseTableName="obs_attestation_item" baseColumnNames="superseding_obs_id"
+			constraintName="obs_attestation_item_superseding_obs" referencedTableName="obs" referencedColumnNames="obs_id"/>
+		<rollback>
+			<dropTable tableName="obs_attestation_item"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>
