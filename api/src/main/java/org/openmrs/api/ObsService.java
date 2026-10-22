@@ -152,6 +152,7 @@ public interface ObsService extends OpenmrsService {
 	 * <strong>Should</strong> set voided bit on given obs<br/>
 	 * <strong>Should</strong> fail if reason parameter is empty<br/>
 	 * <strong>Should</strong> mark the obs entered in error<br/>
+	 * <strong>Should</strong> mark the members of a group entered in error<br/>
 	 * <strong>Should</strong> not mark a version a newer one replaced entered in error
 	 *
 	 * @param obs Obs to void

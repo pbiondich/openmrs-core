@@ -2257,7 +2257,7 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void saveObs_shouldNotMarkTheVersionAnEditReplacesEnteredInError() {
+	public void voidObs_shouldNotMarkAVersionANewerOneReplacedEnteredInError() {
 		Obs saved = saveAndReload(newObsInEncounter(), null);
 
 		saved.setValueNumeric(51d);
@@ -2300,13 +2300,27 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void saveObs_shouldPutAnObsUnvoidedByClearingItsVoidedFlagBackToFinal() {
+		Obs obs = saveAndReload(newObsInEncounter(), null);
+		Context.getObsService().voidObs(obs, "wrong patient");
+		obs = reload(obs);
+
+		obs.setVoided(false);
+		Context.getObsService().saveObs(obs, "unvoided");
+
+		Obs current = reload(obs);
+		assertFalse(current.getVoided());
+		assertEquals(Obs.Status.FINAL, current.getStatus());
+	}
+
+	@Test
 	public void saveObs_shouldNotLetALiveObsBeMarkedEnteredInError() {
 		Obs obs = saveAndReload(newObsInEncounter(), null);
 
 		obs.setStatus(Obs.Status.ENTERED_IN_ERROR);
 		Context.getObsService().saveObs(obs, "not voided");
 
-		assertThrows(UnchangeableObjectException.class, Context::flushSession);
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
 	}
 
 	private Obs newObsInEncounter() {
