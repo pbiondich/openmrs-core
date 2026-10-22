@@ -18,6 +18,7 @@ import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
 import org.openmrs.ProviderRole;
+import org.openmrs.User;
 import org.openmrs.api.ProviderService;
 
 /**
@@ -161,4 +162,16 @@ public interface ProviderDAO {
 	 * @see ProviderService#purgeProviderRole(ProviderRole)
 	 */
 	void deleteProviderRole(ProviderRole providerRole);
+
+	/**
+	 * @see ProviderService#getProviderByUser(User)
+	 */
+	Provider getProviderByUser(User user);
+
+	/**
+	 * @param providerId the id of a saved provider
+	 * @return the provider's type and its user's id as stored in the database, or null if there is no
+	 *         such provider
+	 */
+	Object[] getStoredProviderTypeAndUserId(Integer providerId);
 }

@@ -18,6 +18,7 @@ import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
 import org.openmrs.ProviderRole;
+import org.openmrs.User;
 import org.openmrs.annotation.Handler;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.security.access.prepost.PostAuthorize;
@@ -116,6 +117,7 @@ public interface ProviderService extends OpenmrsService {
 	 *
 	 * @param provider
 	 * @return the Provider object after saving it in the database
+	 * @throws APIException if the provider is saved and its type or user changed; they never change
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
 	 */
@@ -518,4 +520,18 @@ public interface ProviderService extends OpenmrsService {
 	 */
 	@PreAuthorize("hasPermission(#providerRole, '" + PrivilegeConstants.PURGE_PROVIDER_ROLES + "')")
 	void purgeProviderRole(ProviderRole providerRole);
+
+	/**
+	 * Gets the provider backed by a software or device user, which is how the software or device makes
+	 * assertions.
+	 *
+	 * @param user a software or device user
+	 * @return the digital provider backed by the user, or null if there is none
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_PROVIDERS + "')")
+	@PostAuthorize("hasPermission(returnObject, '" + PrivilegeConstants.GET_PROVIDERS + "')")
+	Provider getProviderByUser(User user);
 }

@@ -46,4 +46,18 @@ public class ProviderTest {
 		assertEquals(provider.toString(), "[Provider: providerId:1 providerName:[givenName middleName familyName] ]");
 	}
 
+	@Test
+	public void getName_shouldReturnTheUsersUsernameIfThereIsNoPersonButAUser() {
+		User user = new User();
+		user.setUsername("extractor-0.1");
+		Provider provider = new Provider();
+		provider.setUser(user);
+
+		assertEquals("extractor-0.1", provider.getName());
+	}
+
+	@Test
+	public void getProviderType_shouldDefaultToBiologic() {
+		assertEquals(ProviderType.BIOLOGIC, new Provider().getProviderType());
+	}
 }

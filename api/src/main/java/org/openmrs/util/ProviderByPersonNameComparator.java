@@ -31,7 +31,11 @@ public class ProviderByPersonNameComparator implements Comparator<Provider>, Ser
 		boolean provider2IsNull = (provider2 == null || provider2.getPerson() == null);
 
 		if (provider1IsNull && provider2IsNull) {
-			return 0;
+			// providers without a person, such as digital providers, sort by name; null providers last
+			if (provider1 == null || provider2 == null) {
+				return provider1 == provider2 ? 0 : (provider1 == null ? 1 : -1);
+			}
+			return OpenmrsUtil.compareWithNullAsGreatest(provider1.getName(), provider2.getName());
 		} else if (provider1IsNull) {
 			return 1;
 		} else if (provider2IsNull) {

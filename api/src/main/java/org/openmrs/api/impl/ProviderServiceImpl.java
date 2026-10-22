@@ -14,20 +14,26 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.openmrs.Person;
 import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
 import org.openmrs.ProviderRole;
+import org.openmrs.ProviderType;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.APIException;
 import org.openmrs.api.ProviderService;
 import org.openmrs.api.RefByUuid;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
 import org.openmrs.api.db.ProviderDAO;
 import org.openmrs.customdatatype.CustomDatatypeUtil;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsUtil;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +84,7 @@ public class ProviderServiceImpl extends BaseOpenmrsService implements ProviderS
 	 */
 	@Override
 	public void retireProvider(Provider provider, String reason) {
+		checkTypeAndUser(provider);
 		dao.saveProvider(provider);
 	}
 
@@ -111,8 +118,45 @@ public class ProviderServiceImpl extends BaseOpenmrsService implements ProviderS
 	 */
 	@Override
 	public Provider saveProvider(Provider provider) {
+		checkTypeAndUser(provider);
 		CustomDatatypeUtil.saveAttributesIfNecessary(provider);
 		return dao.saveProvider(provider);
+	}
+
+	/**
+	 * A provider's type and user never change, so its past assertions stay its own. A DIGITAL provider
+	 * is backed by one software or device user, other than the Daemon, and no person, and binding a
+	 * user to a new one needs Edit Users as well; a BIOLOGIC provider has no user. The validator checks
+	 * the pairing too, but validation can be disabled, so the service does as well. The columns are not
+	 * updatable, which is what keeps a flush from changing them; this check reports the attempt.
+	 */
+	private void checkTypeAndUser(Provider provider) {
+		User user = provider.getUser();
+		if (provider.getProviderId() != null) {
+			Object[] stored = dao.getStoredProviderTypeAndUserId(provider.getProviderId());
+			Integer userId = user == null ? null : user.getUserId();
+			if (stored != null && (stored[0] != provider.getProviderType() || !Objects.equals(stored[1], userId))) {
+				throw new APIException("A provider's type and user cannot be changed");
+			}
+		}
+		if (provider.getProviderType() == ProviderType.DIGITAL) {
+			if (user == null || (user.getUserType() != UserType.SOFTWARE && user.getUserType() != UserType.DEVICE)
+			        || provider.getPerson() != null) {
+				throw new APIException("A digital provider must be backed by a software or device user and by no person");
+			}
+			if (Daemon.isDaemonUser(user)) {
+				throw new APIException("The Daemon user cannot back a provider");
+			}
+			Provider existing = dao.getProviderByUser(user);
+			if (existing != null && !existing.equals(provider)) {
+				throw new APIException("User " + user + " already backs a provider");
+			}
+			if (provider.getProviderId() == null) {
+				Context.requirePrivilege(PrivilegeConstants.EDIT_USERS);
+			}
+		} else if (user != null) {
+			throw new APIException("Only a digital provider is backed by a user");
+		}
 	}
 
 	/**
@@ -404,5 +448,14 @@ public class ProviderServiceImpl extends BaseOpenmrsService implements ProviderS
 			throw new APIException("Cannot purge a provider role that is assigned to one or more providers");
 		}
 		dao.deleteProviderRole(providerRole);
+	}
+
+	/**
+	 * @see org.openmrs.api.ProviderService#getProviderByUser(User)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public Provider getProviderByUser(User user) {
+		return dao.getProviderByUser(user);
 	}
 }

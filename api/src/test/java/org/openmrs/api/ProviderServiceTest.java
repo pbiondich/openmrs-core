@@ -28,10 +28,15 @@ import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
 import org.openmrs.ProviderRole;
+import org.openmrs.ProviderType;
+import org.openmrs.SoftwareAgent;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
 import org.openmrs.util.OpenmrsConstants;
+import org.openmrs.validator.ValidateUtil;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -287,6 +292,114 @@ public class ProviderServiceTest extends BaseContextSensitiveTest {
 		assertNotNull(provider.getDateCreated());
 		assertEquals(999, provider.getPerson().getId().intValue());
 
+	}
+
+	@Test
+	public void saveProvider_shouldSaveADigitalProviderBackedByASoftwareUser() {
+		User extractor = newSoftwareUser("extractor", "0.1");
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(extractor);
+		service.saveProvider(provider);
+
+		Context.flushSession();
+		Context.clearSession();
+
+		Provider saved = service.getProviderByUser(Context.getUserService().getUserByUsername("extractor-0.1"));
+		assertEquals(ProviderType.DIGITAL, saved.getProviderType());
+		assertEquals("extractor-0.1", saved.getName());
+	}
+
+	@Test
+	public void saveProvider_shouldNotChangeAProvidersType() {
+		Provider provider = service.getProvider(1);
+		assertEquals(ProviderType.BIOLOGIC, provider.getProviderType());
+		provider.setPerson(null);
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newSoftwareUser("extractor", "0.1"));
+
+		APIException e = assertThrows(APIException.class, () -> service.saveProvider(provider));
+		assertEquals("A provider's type and user cannot be changed", e.getMessage());
+	}
+
+	@Test
+	public void saveProvider_shouldNotChangeADigitalProvidersUser() {
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newSoftwareUser("extractor", "0.1"));
+		service.saveProvider(provider);
+		Context.flushSession();
+
+		provider.setUser(newSoftwareUser("extractor", "0.2"));
+
+		APIException e = assertThrows(APIException.class, () -> service.saveProvider(provider));
+		assertEquals("A provider's type and user cannot be changed", e.getMessage());
+	}
+
+	@Test
+	public void getProviders_shouldFindADigitalProviderByItsUsersUsername() {
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newSoftwareUser("extractor", "0.1"));
+		service.saveProvider(provider);
+		Context.flushSession();
+
+		assertEquals(List.of(provider), service.getProviders("extractor", null, null, null, false));
+		assertTrue(service.getProviders("", null, null, null, false).contains(provider));
+		assertEquals(1, service.getCountOfProviders("extractor").intValue());
+	}
+
+	@Test
+	public void saveProvider_shouldRefuseASecondProviderForTheSameUser() {
+		User extractor = newSoftwareUser("extractor", "0.1");
+		Provider first = new Provider();
+		first.setProviderType(ProviderType.DIGITAL);
+		first.setUser(extractor);
+		service.saveProvider(first);
+		Provider second = new Provider();
+		second.setProviderType(ProviderType.DIGITAL);
+		second.setUser(extractor);
+
+		assertThrows(APIException.class, () -> service.saveProvider(second));
+	}
+
+	@Test
+	public void saveProvider_shouldRefuseTheDaemonUser() {
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		User daemon = Context.getUserService().getUserByUuid("A4F30A1B-5EB9-11DF-A648-37A07F9C90FB");
+		// the test data predates user_type; a migrated database has the Daemon as SOFTWARE
+		daemon.setUserType(UserType.SOFTWARE);
+		provider.setUser(daemon);
+
+		APIException e = assertThrows(APIException.class, () -> service.saveProvider(provider));
+		assertEquals("The Daemon user cannot back a provider", e.getMessage());
+	}
+
+	@Test
+	public void saveProvider_shouldRefuseADigitalProviderWithAHumanUserEvenWhenValidationIsDisabled() {
+		Provider provider = new Provider();
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(Context.getUserService().getUser(501));
+
+		ValidateUtil.setDisableValidation(true);
+		try {
+			APIException e = assertThrows(APIException.class, () -> service.saveProvider(provider));
+			assertEquals("A digital provider must be backed by a software or device user and by no person", e.getMessage());
+		} finally {
+			ValidateUtil.setDisableValidation(false);
+		}
+	}
+
+	@Test
+	public void getProviderByUser_shouldReturnNullForAUserWithoutAProvider() {
+		assertNull(service.getProviderByUser(Context.getUserService().getUser(501)));
+	}
+
+	private User newSoftwareUser(String name, String version) {
+		User user = new User();
+		user.setUsername(name + "-" + version);
+		return Context.getUserService().createSoftwareAgent(new SoftwareAgent(user, name, version), "Openmr5xy").getUser();
 	}
 
 	/**

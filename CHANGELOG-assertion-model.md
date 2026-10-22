@@ -28,3 +28,11 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   changes (no setter, not updatable). The location is where the device is now: `moveDeviceAgent(device, location)`
   changes only that, authorized by the device's user id. Devices are not versioned: new firmware is not a new device.
   `getDeviceAgent(User)` and `getDeviceAgentByIdentifier(identifier)` read them.
+- `provider.user_id` (nullable, unique, FK users) and `provider.provider_type` (`BIOLOGIC` | `DIGITAL`, default
+  `BIOLOGIC`), mapped as `Provider.user` / `Provider.providerType` / `org.openmrs.ProviderType`. A DIGITAL provider is
+  backed by one software or device user, never the Daemon, and no person; a BIOLOGIC provider has no user. The
+  validator and `saveProvider` both enforce this, since validation can be disabled. Binding a user to a new digital
+  provider also needs Edit Users. A provider's type and user never change (the columns are not updatable, and
+  `saveProvider` and `retireProvider` refuse a change), so its past assertions stay its own. A digital provider's name
+  is its user's username, and provider search matches the user's username and system id.
+  `ProviderService.getProviderByUser(User)` finds it.
