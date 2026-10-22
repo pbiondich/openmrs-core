@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 9;
+	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 10;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -41,14 +41,10 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 		ChangeLogVersionFinder finder = new ChangeLogVersionFinder();
 		String latestSnapshot = finder.getLatestSnapshotVersion().get();
 		List<String> changeLogs = finder.getChangeLogCombinations().get(latestSnapshot);
-		updateDatabase(changeLogs);
-
-		// run the asserter backfill again, now that there are obs for it to fill
+		// the snapshots, then rows for the asserter backfill to fill, then the updates
 		String latestUpdates = changeLogs.get(changeLogs.size() - 1);
+		updateDatabase(changeLogs.subList(0, changeLogs.size() - 1));
 		insertEncountersWithOneTwoAndNoProviders();
-		Liquibase backfill = getLiquibase(latestUpdates);
-		backfill.rollback(1, (String) null);
-		backfill.getDatabase().getConnection().commit();
 		updateDatabase(latestUpdates);
 
 		try (Connection connection = getConnection()) {
@@ -59,6 +55,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
 		try (Connection connection = getConnection()) {
 			assertEquals("SOFTWARE", getUserType(connection, "daemon"));
+			assertEquals(null, getPersonId(connection, "daemon"));
 			assertEquals("HUMAN", getUserType(connection, "admin"));
 			assertTrue(isPersonIdNullable(connection));
 			assertTrue(hasColumn(connection, "software_agent", "user_id"));
@@ -80,6 +77,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "obs", "asserter_id"));
 			assertFalse(hasColumn(connection, "software_agent", "user_id"));
 			assertFalse(isPersonIdNullable(connection));
+			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}
 	}
 
@@ -127,6 +125,15 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			statement.execute("INSERT INTO encounter_provider (encounter_id, provider_id, encounter_role_id, creator, "
 			        + "date_created, voided, uuid) VALUES (2, 2, 1, 1, '2026-01-01', FALSE, 'ep-3')");
 			connection.commit();
+		}
+	}
+
+	private Integer getPersonId(Connection connection, String systemId) throws SQLException {
+		try (Statement statement = connection.createStatement();
+		        ResultSet rs = statement.executeQuery("SELECT person_id FROM users WHERE system_id = '" + systemId + "'")) {
+			assertTrue(rs.next(), "no user with system_id " + systemId);
+			int personId = rs.getInt(1);
+			return rs.wasNull() ? null : personId;
 		}
 	}
 

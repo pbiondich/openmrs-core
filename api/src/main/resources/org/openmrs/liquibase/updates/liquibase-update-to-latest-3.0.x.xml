@@ -348,4 +348,21 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p1-daemon-no-person-2026-10-22" author="pbiondich">
+		<comment>
+			The Daemon user is software, so it has no person. It used to share person 1 with the admin user only because
+			users.person_id was required
+		</comment>
+		<update tableName="users">
+			<column name="person_id" valueComputed="NULL"/>
+			<where>uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB'</where>
+		</update>
+		<rollback>
+			<sql>
+				UPDATE users SET person_id = 1 WHERE uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB' AND person_id IS NULL
+				AND EXISTS (SELECT 1 FROM person WHERE person_id = 1)
+			</sql>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

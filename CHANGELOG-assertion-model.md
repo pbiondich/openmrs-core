@@ -43,3 +43,8 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   unless the caller sets another, so moving an encounter or merging patients never re-attributes obs. Existing obs are
   backfilled only where their encounter has exactly one provider. `ObsService.getObservationsByAsserter` and
   `getObservationsBySoftwareVersion` find them, a page at a time.
+- Privileges `Create Preliminary Obs` and `Attest Obs` (`PrivilegeConstants.CREATE_PRELIMINARY_OBS` / `ATTEST_OBS`),
+  created at startup like other core privileges. Phase 2 enforces them together with the finalization policy, since
+  devices auto-finalize.
+- The Daemon user no longer has a person. It shared person 1 with the admin user only because `users.person_id` used
+  to be required; rolling back gives it person 1 again.

@@ -249,6 +249,24 @@ public class PrivilegeConstants {
 
 	public static final String PURGE_OBS = "Purge Observations";
 
+	/**
+	 * Lets a digital provider's user create preliminary obs. Enforced in phase 2 of the assertion
+	 * model.
+	 *
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to create preliminary observations, as software or a device (not yet enforced)")
+	public static final String CREATE_PRELIMINARY_OBS = "Create Preliminary Obs";
+
+	/**
+	 * Lets a biologic provider's user attest preliminary obs, which makes them final. Enforced in phase
+	 * 2 of the assertion model.
+	 *
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to attest preliminary observations, making them final (not yet enforced)")
+	public static final String ATTEST_OBS = "Attest Obs";
+
 	@AddOnStartup(description = "Able to edit patient notes")
 	public static final String EDIT_NOTE = "Edit Notes";
 
