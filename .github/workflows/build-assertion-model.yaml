@@ -34,17 +34,19 @@ jobs:
           # which H2 does not prove; MariaDB stands in for MySQL (see Containers). The H2 leg
           # already runs ValidateHibernateMappingsDatabaseIT, which cannot build its schema here.
           # The other upstream DatabaseITs are left out because two of them fail on PostgreSQL
-          # upstream (the uuid-ossp extension, and audit tables for two tables)
+          # upstream (the uuid-ossp extension, and audit tables for two tables). Each test class
+          # gets its own JVM, and so its own container: on PostgreSQL DatabaseUpdaterDatabaseIT
+          # counts the wrong changesets when another DatabaseIT ran before it in the same JVM
           - name: Migration tests (PostgreSQL)
             install: -pl api -am -Dspotbugs.skip=true
             test: >-
-              mvn surefire:test --batch-mode -pl api
+              mvn surefire:test --batch-mode -pl api -DreuseForks=false
               -Dtest='*ChangeSetsDatabaseIT,DatabaseUpdaterDatabaseIT'
               -DuseInMemoryDatabase=false -Ddatabase=postgres
           - name: Migration tests (MariaDB)
             install: -pl api -am -Dspotbugs.skip=true
             test: >-
-              mvn surefire:test --batch-mode -pl api
+              mvn surefire:test --batch-mode -pl api -DreuseForks=false
               -Dtest='*ChangeSetsDatabaseIT,DatabaseUpdaterDatabaseIT'
               -DuseInMemoryDatabase=false -Ddatabase=mariadb
     runs-on: ubuntu-latest
