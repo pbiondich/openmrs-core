@@ -34,6 +34,7 @@ import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
+import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
@@ -786,5 +787,35 @@ public class HibernateUserDAO implements UserDAO {
 		return sessionFactory.getCurrentSession()
 		        .createQuery("select u.userType from User u where u.userId = :userId", UserType.class)
 		        .setParameter("userId", userId).setHibernateFlushMode(FlushMode.MANUAL).uniqueResult();
+	}
+
+	/**
+	 * @see UserDAO#saveSoftwareAgent(SoftwareAgent)
+	 */
+	@Override
+	public SoftwareAgent saveSoftwareAgent(SoftwareAgent agent) {
+		sessionFactory.getCurrentSession().persist(agent);
+		return agent;
+	}
+
+	/**
+	 * @see UserDAO#getSoftwareAgent(User)
+	 */
+	@Override
+	public SoftwareAgent getSoftwareAgent(User user) {
+		if (user == null || user.getUserId() == null) {
+			return null;
+		}
+		return sessionFactory.getCurrentSession().get(SoftwareAgent.class, user.getUserId());
+	}
+
+	/**
+	 * @see UserDAO#getSoftwareAgentVersions(String)
+	 */
+	@Override
+	public List<SoftwareAgent> getSoftwareAgentVersions(String name) {
+		return sessionFactory.getCurrentSession()
+		        .createQuery("from SoftwareAgent where name = :name order by userId", SoftwareAgent.class)
+		        .setParameter("name", name).getResultList();
 	}
 }

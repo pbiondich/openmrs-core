@@ -28,6 +28,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
+import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.annotation.Logging;
@@ -967,4 +968,46 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 		return Arrays.asList(Role.class, Privilege.class, User.class);
 	}
 
+	/**
+	 * @see org.openmrs.api.UserService#createSoftwareAgent(SoftwareAgent, String)
+	 */
+	@Override
+	public SoftwareAgent createSoftwareAgent(SoftwareAgent agent, String password) throws APIException {
+		User user = agent.getUser();
+		if (user == null || user.getUserId() != null) {
+			throw new APIException("A software agent is created with a new user; a new version needs a new user");
+		}
+		if (StringUtils.isBlank(agent.getName()) || StringUtils.isBlank(agent.getVersion())) {
+			throw new APIException("A software agent needs a name and a version");
+		}
+		if (agent.getConfigHash() != null && !agent.getConfigHash().matches("[0-9a-f]{64}")) {
+			throw new APIException("A software agent's config hash must be a SHA-256 hash in lowercase hex");
+		}
+		if (dao.getSoftwareAgentVersions(agent.getName()).stream()
+		        .anyMatch(existing -> existing.getVersion().equals(agent.getVersion()))) {
+			throw new APIException("Software agent " + agent + " already exists");
+		}
+
+		user.setUserType(UserType.SOFTWARE);
+		Context.getUserService().createUser(user, password);
+		return dao.saveSoftwareAgent(agent);
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#getSoftwareAgent(User)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public SoftwareAgent getSoftwareAgent(User user) {
+		return dao.getSoftwareAgent(user);
+	}
+
+	/**
+	 * @see org.openmrs.api.UserService#getSoftwareAgentVersions(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<SoftwareAgent> getSoftwareAgentVersions(String name) {
+		return dao.getSoftwareAgentVersions(name);
+	}
 }

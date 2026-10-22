@@ -13,3 +13,12 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   SOFTWARE users may have none. Rolling back the changeset fails while any user has no person.
 - User search (`getUsers`, `getCountOfUsers`) finds users without a person by username or system id, and
   `UserByNameComparator` sorts them after named users, by username.
+- `software_agent` (`user_id` PK/FK users, `name`, `version`, `model_identifier`, `config_hash`; `(name, version)`
+  unique), mapped as `org.openmrs.SoftwareAgent`. Decision 1 is settled: the version is part of the identity, so each
+  version is its own SOFTWARE user and its own row, and all versions of the software share its name (the plan's
+  `family_id` was dropped: the name already identifies the software). A changed model or configuration needs a new
+  version; `model_identifier` and `config_hash` describe a version but do not identify it. Rows are never changed
+  (`@Immutable`).
+- `UserService.createSoftwareAgent(agent, password)` creates the SOFTWARE user and its agent together, so every
+  software user created this way has one; `getSoftwareAgent(User)` and `getSoftwareAgentVersions(name)` read them.
+  `User` has no link to its software agent, so loading a user never loads one.

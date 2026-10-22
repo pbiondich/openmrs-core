@@ -14,6 +14,7 @@ import java.util.List;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
+import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.api.UserService;
@@ -223,4 +224,19 @@ public interface UserDAO {
 	 * @return the user's type as stored in the database, or null if there is no such user
 	 */
 	UserType getStoredUserType(Integer userId);
+
+	/**
+	 * @see UserService#createSoftwareAgent(SoftwareAgent, String)
+	 */
+	SoftwareAgent saveSoftwareAgent(SoftwareAgent agent);
+
+	/**
+	 * @see UserService#getSoftwareAgent(User)
+	 */
+	SoftwareAgent getSoftwareAgent(User user);
+
+	/**
+	 * @see UserService#getSoftwareAgentVersions(String)
+	 */
+	List<SoftwareAgent> getSoftwareAgentVersions(String name);
 }

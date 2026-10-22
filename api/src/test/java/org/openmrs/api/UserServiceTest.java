@@ -31,6 +31,7 @@ import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
+import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
@@ -177,6 +178,82 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 		assertNull(saved.getPerson());
 		assertEquals(List.of(saved), userService.getUsers("extractor", null, false));
 		assertEquals(1, userService.getCountOfUsers("extractor", new ArrayList<>(), false).intValue());
+	}
+
+	@Test
+	public void createSoftwareAgent_shouldCreateASoftwareUserWithoutAPersonAndItsAgent() {
+		String configHash = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+		SoftwareAgent agent = newSoftwareAgent("extractor", "0.1");
+		agent.setModelIdentifier("local-model-7b");
+		agent.setConfigHash(configHash);
+		userService.createSoftwareAgent(agent, "Openmr5xy");
+
+		Context.flushSession();
+		Context.clearSession();
+
+		User user = userService.getUserByUsername("extractor-0.1");
+		assertEquals(UserType.SOFTWARE, user.getUserType());
+		assertNull(user.getPerson());
+		SoftwareAgent saved = userService.getSoftwareAgent(user);
+		assertEquals("extractor", saved.getName());
+		assertEquals("0.1", saved.getVersion());
+		assertEquals("local-model-7b", saved.getModelIdentifier());
+		assertEquals(configHash, saved.getConfigHash());
+	}
+
+	@Test
+	public void getSoftwareAgentVersions_shouldReturnEveryVersionOfTheSoftwareOldestFirst() {
+		userService.createSoftwareAgent(newSoftwareAgent("extractor", "0.1"), "Openmr5xy");
+		userService.createSoftwareAgent(newSoftwareAgent("transcriber", "0.1"), "Openmr5xy");
+		userService.createSoftwareAgent(newSoftwareAgent("extractor", "0.2"), "Openmr5xy");
+
+		assertEquals(List.of("0.1", "0.2"),
+		    userService.getSoftwareAgentVersions("extractor").stream().map(SoftwareAgent::getVersion).toList());
+	}
+
+	@Test
+	public void createSoftwareAgent_shouldRefuseANameAndVersionThatExist() {
+		userService.createSoftwareAgent(newSoftwareAgent("extractor", "0.1"), "Openmr5xy");
+		SoftwareAgent again = new SoftwareAgent(new User(), "extractor", "0.1");
+		again.getUser().setUsername("extractor-again");
+
+		assertThrows(APIException.class, () -> userService.createSoftwareAgent(again, "Openmr5xy"));
+	}
+
+	@Test
+	public void createSoftwareAgent_shouldRefuseASavedUser() {
+		SoftwareAgent agent = new SoftwareAgent(userService.getUser(502), "extractor", "0.1");
+		assertThrows(APIException.class, () -> userService.createSoftwareAgent(agent, "Openmr5xy"));
+	}
+
+	@Test
+	public void createSoftwareAgent_shouldRefuseAConfigHashThatIsNotSha256Hex() {
+		SoftwareAgent agent = newSoftwareAgent("extractor", "0.1");
+		agent.setConfigHash("not a hash");
+		assertThrows(APIException.class, () -> userService.createSoftwareAgent(agent, "Openmr5xy"));
+	}
+
+	@Test
+	public void createSoftwareAgent_shouldCreateAnAgentThatIsNeverChanged() {
+		SoftwareAgent agent = userService.createSoftwareAgent(newSoftwareAgent("extractor", "0.1"), "Openmr5xy");
+		Context.flushSession();
+
+		agent.setVersion("0.2");
+		Context.flushSession();
+		Context.clearSession();
+
+		assertEquals("0.1", userService.getSoftwareAgent(userService.getUserByUsername("extractor-0.1")).getVersion());
+	}
+
+	@Test
+	public void getSoftwareAgent_shouldReturnNullForAUserWithoutOne() {
+		assertNull(userService.getSoftwareAgent(userService.getUser(502)));
+	}
+
+	private SoftwareAgent newSoftwareAgent(String name, String version) {
+		User user = new User();
+		user.setUsername(name + "-" + version);
+		return new SoftwareAgent(user, name, version);
 	}
 
 	@Test
