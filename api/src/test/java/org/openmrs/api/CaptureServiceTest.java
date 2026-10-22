@@ -23,8 +23,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
+import org.openmrs.Derivation;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
+import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.CaptureServiceImpl;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -349,6 +352,76 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 
 	private CaptureServiceImpl unproxied() throws Exception {
 		return (CaptureServiceImpl) AopTestUtils.getUltimateTargetObject(captureService);
+	}
+
+	@Test
+	public void createDerivation_shouldDefaultTheAgentAndDictionaryVersion() {
+		DictionaryVersion current = new DictionaryVersion();
+		current.setLabel("CIEL 2026-09");
+		current.setInUseFrom(new Date(System.currentTimeMillis() - 1000));
+		Context.getConceptService().saveDictionaryVersion(current);
+
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertEquals(Context.getAuthenticatedUser(), derivation.getAgent());
+		assertEquals(current, derivation.getDictionaryVersion());
+		assertEquals(derivation, captureService.getDerivationsByCapture(derivation.getCapture()).get(0));
+	}
+
+	@Test
+	public void createDerivation_shouldFailForARunThatFinishedBeforeItStarted() {
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setFinished(new Date(derivation.getStarted().getTime() - 1));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
+	}
+
+	@Test
+	public void createDerivation_shouldFailForAVoidedCapture() {
+		Capture capture = captureService.voidCapture(create(Kind.SCANNED_FORM, "application/pdf"), "wrong patient");
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation(capture)));
+	}
+
+	@Test
+	public void voidDerivation_shouldFailForADerivationThatIsNotSaved() {
+		assertThrows(APIException.class,
+		    () -> captureService.voidDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")), "x"));
+	}
+
+	@Test
+	public void createDerivation_shouldFailForADerivationThatIsAlreadySaved() {
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
+	}
+
+	@Test
+	public void saveObs_shouldKeepTheCaptureSpanAndDerivationAcrossAnEdit() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+		Derivation derivation = captureService.createDerivation(derivation(capture));
+		ObsService obsService = Context.getObsService();
+		Obs obs = new Obs(encounter.getPatient(), Context.getConceptService().getConcept(5089), new Date(), null);
+		obs.setEncounter(encounter);
+		obs.setValueNumeric(50.0);
+		obs.setCapture(capture);
+		obs.setSpan("xywh=412,880,60,24;field=weight");
+		obs.setDerivation(derivation);
+		obs = obsService.saveObs(obs, null);
+
+		obs.setValueNumeric(51.0);
+		Obs edited = obsService.saveObs(obs, "misread");
+
+		assertEquals(capture, edited.getCapture());
+		assertEquals("xywh=412,880,60,24;field=weight", edited.getSpan());
+		assertEquals(derivation, edited.getDerivation());
+	}
+
+	private Derivation derivation(Capture capture) {
+		Date started = new Date(System.currentTimeMillis() - 5000);
+		Derivation derivation = new Derivation(capture, started, new Date());
+		derivation.setParamsHash("sha256:" + "a".repeat(64));
+		return derivation;
 	}
 
 	private Capture create(Kind kind, String mimeType) {

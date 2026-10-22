@@ -17,10 +17,13 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
+import org.openmrs.Capture;
 import org.openmrs.Concept;
 import org.openmrs.ConceptDatatype;
 import org.openmrs.ConceptReferenceRange;
+import org.openmrs.Derivation;
 import org.openmrs.Drug;
+import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.ObsReferenceRange;
 import org.openmrs.Person;
@@ -963,4 +966,87 @@ public class ObsValidatorTest extends BaseContextSensitiveTest {
 		return obs;
 	}
 
+	@Test
+	public void validate_shouldPassASpanThatFitsItsCapturesKind() {
+		assertTrue(ObsValidator.spanFits("t=42.0-58.0", Capture.Kind.AUDIO));
+		assertTrue(ObsValidator.spanFits("t=42-42;speaker=nurse", Capture.Kind.VIDEO));
+		assertTrue(ObsValidator.spanFits("xywh=412,880,60,24;field=chest_indrawing", Capture.Kind.SCANNED_FORM));
+		assertTrue(ObsValidator.spanFits("xywh=0,0,10,10;page=2", Capture.Kind.HANDWRITTEN));
+		assertTrue(ObsValidator.spanFits("c=120-184", Capture.Kind.TYPED_TEXT));
+		assertTrue(ObsValidator.spanFits("field=chest_indrawing", Capture.Kind.SCANNED_FORM));
+
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, "xywh=412,880,60,24;field=chest_indrawing");
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+		assertFalse(errors.hasErrors());
+	}
+
+	@Test
+	public void validate_shouldFailForASpanWithoutACapture() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, "xywh=412,880,60,24");
+		obs.setCapture(null);
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("span"));
+	}
+
+	@Test
+	public void validate_shouldFailForASpanThatDoesNotFollowTheGrammar() {
+		for (String span : new String[] { "", "t=58-42", "t=1-2;t=3-4", "c=abc", "xywh=1,2,3", "c=1-2field=x",
+		        "field=has space", "<script>", "Field=x", "t=1-2;" }) {
+			assertFalse(
+			    ObsValidator.spanFits(span, Capture.Kind.AUDIO) || ObsValidator.spanFits(span, Capture.Kind.TYPED_TEXT)
+			            || ObsValidator.spanFits(span, Capture.Kind.SCANNED_FORM),
+			    span);
+		}
+	}
+
+	@Test
+	public void validate_shouldFailForASpanThatDoesNotFitItsCapturesKind() {
+		assertFalse(ObsValidator.spanFits("t=42.0-58.0", Capture.Kind.SCANNED_FORM));
+		assertFalse(ObsValidator.spanFits("xywh=412,880,60,24", Capture.Kind.AUDIO));
+		assertFalse(ObsValidator.spanFits("c=120-184", Capture.Kind.IMAGE));
+
+		Obs obs = provenanceObs(Capture.Kind.AUDIO, "c=120-184");
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+		assertTrue(errors.hasFieldErrors("span"));
+	}
+
+	@Test
+	public void validate_shouldFailForACaptureOfAnotherEncounter() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, null);
+		obs.getCapture().setEncounter(Context.getEncounterService().getEncounter(4));
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("capture"));
+	}
+
+	@Test
+	public void validate_shouldFailForADerivationOverAnotherCapture() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, null);
+		obs.setDerivation(
+		    new Derivation(new Capture(obs.getEncounter(), Capture.Kind.AUDIO, "audio/mpeg"), new Date(), new Date()));
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("derivation"));
+	}
+
+	private Obs provenanceObs(Capture.Kind kind, String span) {
+		Encounter encounter = Context.getEncounterService().getEncounter(3);
+		Capture capture = new Capture(encounter, kind, "application/pdf");
+		Obs obs = new Obs(encounter.getPatient(), Context.getConceptService().getConcept(5089), new Date(), null);
+		obs.setValueNumeric(50.0);
+		obs.setEncounter(encounter);
+		obs.setCapture(capture);
+		obs.setSpan(span);
+		obs.setDerivation(new Derivation(capture, new Date(), new Date()));
+		return obs;
+	}
 }

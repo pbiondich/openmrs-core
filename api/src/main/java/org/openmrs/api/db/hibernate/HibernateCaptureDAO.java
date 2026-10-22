@@ -15,6 +15,7 @@ import java.util.List;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.openmrs.Capture;
+import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.CaptureDAO;
@@ -101,5 +102,23 @@ public class HibernateCaptureDAO implements CaptureDAO {
 		                + " dateChanged = :deletedAt where captureId = :id and artifactDeletedAt is null")
 		        .setParameter("deletedAt", deletedAt).setParameter("user", Context.getAuthenticatedUser())
 		        .setParameter("id", captureId).executeUpdate();
+	}
+
+	@Override
+	public Derivation saveDerivation(Derivation derivation) {
+		return HibernateUtil.saveOrUpdate(sessionFactory.getCurrentSession(), derivation);
+	}
+
+	@Override
+	public Derivation getDerivationByUuid(String uuid) {
+		return HibernateUtil.getUniqueEntityByUUID(sessionFactory, Derivation.class, uuid);
+	}
+
+	@Override
+	public List<Derivation> getDerivationsByCapture(Capture capture) {
+		return sessionFactory.getCurrentSession()
+		        .createQuery("from Derivation where capture = :capture and voided = false order by derivationId",
+		            Derivation.class)
+		        .setParameter("capture", capture).list();
 	}
 }

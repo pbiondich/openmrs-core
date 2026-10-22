@@ -696,4 +696,108 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p3-derivation-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="derivation"/>
+			</not>
+		</preConditions>
+		<comment>
+			One finished run of an agent, such as an extraction model, over a capture: who ran, against which dictionary
+			version (null means unknown), when, and a hash of its parameters
+		</comment>
+		<createTable tableName="derivation">
+			<column name="derivation_id" autoIncrement="true" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="capture_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="agent_user_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="dictionary_version_id" type="INT"/>
+			<column name="started" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="finished" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="params_hash" type="VARCHAR(255)"/>
+			<column name="creator" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_created" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="changed_by" type="INT"/>
+			<column name="date_changed" type="DATETIME"/>
+			<column name="voided" type="BOOLEAN" defaultValueBoolean="false">
+				<constraints nullable="false"/>
+			</column>
+			<column name="voided_by" type="INT"/>
+			<column name="date_voided" type="DATETIME"/>
+			<column name="void_reason" type="VARCHAR(255)"/>
+			<column name="uuid" type="CHAR(38)">
+				<constraints nullable="false" unique="true"/>
+			</column>
+		</createTable>
+		<createIndex tableName="derivation" indexName="derivation_capture_idx">
+			<column name="capture_id"/>
+		</createIndex>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="capture_id" constraintName="derivation_capture"
+			referencedTableName="capture" referencedColumnNames="capture_id"/>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="agent_user_id" constraintName="derivation_agent"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="dictionary_version_id"
+			constraintName="derivation_dictionary_version" referencedTableName="dictionary_version"
+			referencedColumnNames="dictionary_version_id"/>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="creator" constraintName="derivation_creator"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="changed_by" constraintName="derivation_changed_by"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="derivation" baseColumnNames="voided_by" constraintName="derivation_voided_by"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<rollback>
+			<dropTable tableName="derivation"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p3-obs-provenance-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="obs" columnName="capture_id"/>
+			</not>
+		</preConditions>
+		<comment>
+			Where an obs was taken from: its capture, the span within it (a varchar grammar such as t=42.0-58.0,
+			xywh=412,880,60,24;field=chest_indrawing or c=120-184) and the derivation that produced it. All null for obs
+			not taken from a capture. Rolling back drops every link recorded since
+		</comment>
+		<addColumn tableName="obs">
+			<column name="capture_id" type="INT"/>
+			<column name="span" type="VARCHAR(255)"/>
+			<column name="derivation_id" type="INT"/>
+		</addColumn>
+		<createIndex tableName="obs" indexName="obs_capture">
+			<column name="capture_id"/>
+		</createIndex>
+		<createIndex tableName="obs" indexName="obs_derivation">
+			<column name="derivation_id"/>
+		</createIndex>
+		<addForeignKeyConstraint baseTableName="obs" baseColumnNames="capture_id" constraintName="obs_capture_fk"
+			referencedTableName="capture" referencedColumnNames="capture_id"/>
+		<addForeignKeyConstraint baseTableName="obs" baseColumnNames="derivation_id" constraintName="obs_derivation_fk"
+			referencedTableName="derivation" referencedColumnNames="derivation_id"/>
+		<rollback>
+			<dropForeignKeyConstraint baseTableName="obs" constraintName="obs_derivation_fk"/>
+			<dropForeignKeyConstraint baseTableName="obs" constraintName="obs_capture_fk"/>
+			<dropIndex tableName="obs" indexName="obs_derivation"/>
+			<dropIndex tableName="obs" indexName="obs_capture"/>
+			<dropColumn tableName="obs" columnName="derivation_id"/>
+			<dropColumn tableName="obs" columnName="span"/>
+			<dropColumn tableName="obs" columnName="capture_id"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

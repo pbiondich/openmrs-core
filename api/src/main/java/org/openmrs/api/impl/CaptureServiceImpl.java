@@ -27,6 +27,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
+import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.api.APIException;
 import org.openmrs.api.CaptureService;
@@ -199,6 +200,61 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 			throw new APIException("Capture.error.notSaved", (Object[]) null);
 		}
 		return dao.saveCapture(capture);
+	}
+
+	/**
+	 * @see CaptureService#createDerivation(Derivation)
+	 */
+	@Override
+	public Derivation createDerivation(Derivation derivation) {
+		if (derivation.getDerivationId() != null || derivation.getCapture() == null || derivation.getStarted() == null
+		        || derivation.getFinished() == null || derivation.getFinished().before(derivation.getStarted())) {
+			throw new APIException("Derivation.error.invalid", (Object[]) null);
+		}
+		if (derivation.getCapture().getVoided()) {
+			throw new APIException("Derivation.error.captureVoided", new Object[] { derivation.getCapture().getUuid() });
+		}
+		if (derivation.getAgent() == null) {
+			derivation.setAgent(Context.getAuthenticatedUser());
+		}
+		if (derivation.getDictionaryVersion() == null) {
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+				derivation.setDictionaryVersion(Context.getConceptService().getCurrentDictionaryVersion());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+			}
+		}
+		return dao.saveDerivation(derivation);
+	}
+
+	/**
+	 * @see CaptureService#getDerivationByUuid(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public Derivation getDerivationByUuid(String uuid) {
+		return dao.getDerivationByUuid(uuid);
+	}
+
+	/**
+	 * @see CaptureService#getDerivationsByCapture(Capture)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<Derivation> getDerivationsByCapture(Capture capture) {
+		return dao.getDerivationsByCapture(capture);
+	}
+
+	/**
+	 * @see CaptureService#voidDerivation(Derivation, String)
+	 */
+	@Override
+	public Derivation voidDerivation(Derivation derivation, String reason) {
+		if (derivation.getDerivationId() == null) {
+			throw new APIException("Derivation.error.notSaved", (Object[]) null);
+		}
+		return dao.saveDerivation(derivation);
 	}
 
 	/**

@@ -12,7 +12,10 @@ package org.openmrs.validator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.openmrs.Capture;
 import org.openmrs.Concept;
 import org.openmrs.ConceptDatatype;
 import org.openmrs.ConceptNumeric;
@@ -75,7 +78,13 @@ public class ObsValidator implements Validator {
 	 * <strong>Should</strong> fail validation if field lengths are not correct<br/>
 	 * <strong>Should</strong> not validate if obs is voided<br/>
 	 * <strong>Should</strong> not validate a voided child obs<br/>
-	 * <strong>Should</strong> fail for a null object
+	 * <strong>Should</strong> fail for a null object<br/>
+	 * <strong>Should</strong> pass a span that fits its capture's kind<br/>
+	 * <strong>Should</strong> fail for a span without a capture<br/>
+	 * <strong>Should</strong> fail for a span that does not follow the grammar<br/>
+	 * <strong>Should</strong> fail for a span that does not fit its capture's kind<br/>
+	 * <strong>Should</strong> fail for a capture of another encounter<br/>
+	 * <strong>Should</strong> fail for a derivation over another capture
 	 *
 	 * @see org.springframework.validation.Validator#validate(java.lang.Object,
 	 *      org.springframework.validation.Errors)
@@ -91,7 +100,7 @@ public class ObsValidator implements Validator {
 		List<Obs> ancestors = new ArrayList<>();
 		validateHelper(obs, errors, ancestors, true);
 		ValidateUtil.validateFieldLengths(errors, obj.getClass(), "accessionNumber", "valueModifier", "valueComplex",
-		    "comment", "voidReason");
+		    "comment", "voidReason", "span");
 	}
 
 	/**
@@ -221,6 +230,8 @@ public class ObsValidator implements Validator {
 				errors.rejectValue("concept", "must have a datatype");
 			}
 		}
+
+		validateProvenance(obs, errors, atRootNode);
 
 		// If an obs fails validation, don't bother checking its children
 		if (errors.hasErrors()) {
@@ -403,4 +414,70 @@ public class ObsValidator implements Validator {
 		}
 	}
 
+	/**
+	 * A span is a locator, a set of <code>;</code> separated <code>name=value</code> parameters, or a
+	 * locator followed by them: <code>t=42.0-58.0</code> (seconds into a recording),
+	 * <code>xywh=412,880,60,24;field=chest_indrawing</code> (a region of a page or image, in pixels),
+	 * <code>c=120-184</code> (characters into text) or <code>field=chest_indrawing</code>.
+	 */
+	private static final Pattern SPAN = Pattern
+	        .compile("(?:(t|xywh|c)=([0-9.,-]+))?(?:(?:^|;)(?!(?:t|xywh|c)=)[a-z][a-z0-9_]*=[^;\\s]+)*");
+
+	private static final Pattern TIME = Pattern.compile("(\\d+(?:\\.\\d+)?)-(\\d+(?:\\.\\d+)?)");
+
+	private static final Pattern REGION = Pattern.compile("\\d+,\\d+,\\d+,\\d+");
+
+	private static final Pattern CHARACTERS = Pattern.compile("(\\d+)-(\\d+)");
+
+	/**
+	 * Checks that an obs's capture, span and derivation agree: a span needs a capture and must fit its
+	 * kind, the capture must be of the obs's encounter, and a derivation must be over the same capture.
+	 */
+	private void validateProvenance(Obs obs, Errors errors, boolean atRootNode) {
+		Capture capture = obs.getCapture();
+		if (obs.getSpan() != null && (capture == null || !spanFits(obs.getSpan(), capture.getKind()))) {
+			reject(errors, atRootNode, "span", capture == null ? "Obs.error.spanWithoutCapture" : "Obs.error.span");
+		}
+		if (capture != null && obs.getEncounter() != null && !obs.getEncounter().equals(capture.getEncounter())) {
+			reject(errors, atRootNode, "capture", "Obs.error.captureOfAnotherEncounter");
+		}
+		if (obs.getDerivation() != null && (capture == null || !capture.equals(obs.getDerivation().getCapture()))) {
+			reject(errors, atRootNode, "derivation", "Obs.error.derivationOfAnotherCapture");
+		}
+	}
+
+	private static void reject(Errors errors, boolean atRootNode, String field, String code) {
+		if (atRootNode) {
+			errors.rejectValue(field, code);
+		} else {
+			errors.rejectValue("groupMembers", "Obs.error.inGroupMember");
+		}
+	}
+
+	/**
+	 * @return whether the span follows the grammar and its locator, if any, suits the kind of capture
+	 */
+	static boolean spanFits(String span, Capture.Kind kind) {
+		Matcher matcher = SPAN.matcher(span);
+		if (span.isEmpty() || !matcher.matches()) {
+			return false;
+		}
+		String locator = matcher.group(1);
+		String value = matcher.group(2);
+		if (locator == null) {
+			return true;
+		}
+		switch (locator) {
+			case "t":
+				return (kind == Capture.Kind.AUDIO || kind == Capture.Kind.VIDEO) && ordered(TIME.matcher(value));
+			case "xywh":
+				return kind != Capture.Kind.AUDIO && kind != Capture.Kind.TYPED_TEXT && REGION.matcher(value).matches();
+			default:
+				return kind == Capture.Kind.TYPED_TEXT && ordered(CHARACTERS.matcher(value));
+		}
+	}
+
+	private static boolean ordered(Matcher range) {
+		return range.matches() && Double.parseDouble(range.group(1)) <= Double.parseDouble(range.group(2));
+	}
 }
