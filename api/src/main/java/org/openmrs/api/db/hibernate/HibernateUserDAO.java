@@ -27,6 +27,7 @@ import jakarta.persistence.criteria.Root;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.hibernate.FlushMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.openmrs.Person;
@@ -34,6 +35,7 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.api.db.DAOException;
@@ -492,7 +494,8 @@ public class HibernateUserDAO implements UserDAO {
 	@SuppressWarnings("unchecked")
 	public List<User> getUsers(String name, List<Role> roles, boolean includeRetired, Integer start, Integer length) {
 
-		String hqlSelectStart = "select distinct user from User as user inner join user.person.names as name ";
+		String hqlSelectStart = "select distinct user from User as user "
+		        + "left join user.person as person left join person.names as name ";
 		Query query = createUserSearchQuery(name, roles, includeRetired, hqlSelectStart);
 
 		if (start != null) {
@@ -661,7 +664,8 @@ public class HibernateUserDAO implements UserDAO {
 	 */
 	@Override
 	public Integer getCountOfUsers(String name, List<Role> roles, boolean includeRetired) {
-		String hqlSelectStart = "select count(distinct user) from User as user inner join user.person.names as name ";
+		String hqlSelectStart = "select count(distinct user) from User as user "
+		        + "left join user.person as person left join person.names as name ";
 		Query query = createUserSearchQuery(name, roles, includeRetired, hqlSelectStart);
 
 		return ((Long) JpaUtils.getSingleResultOrNull(query)).intValue();
@@ -684,7 +688,7 @@ public class HibernateUserDAO implements UserDAO {
 
 		// Create an HQL query like this:
 		// select distinct user
-		// from User as user inner join user.person.names as name inner join user.roles as role
+		// from User as user left join user.person as person left join person.names as name inner join user.roles as role
 		// where (user.username like :name1 or ...and for systemId givenName familyName familyName2...)
 		//   and (user.username like :name2 or ...and for systemId givenName familyName familyName2...)
 		//   ...repeat for all name fragments...
@@ -771,5 +775,16 @@ public class HibernateUserDAO implements UserDAO {
 	@Override
 	public String getLastLoginTime(User user) {
 		return user.getUserProperty(OpenmrsConstants.USER_PROPERTY_LAST_LOGIN_TIMESTAMP);
+	}
+
+	/**
+	 * @see UserDAO#getStoredUserType(Integer)
+	 */
+	@Override
+	public UserType getStoredUserType(Integer userId) {
+		// do not flush first: the user being checked may hold changes that must not reach the database
+		return sessionFactory.getCurrentSession()
+		        .createQuery("select u.userType from User u where u.userId = :userId", UserType.class)
+		        .setParameter("userId", userId).setHibernateFlushMode(FlushMode.MANUAL).uniqueResult();
 	}
 }

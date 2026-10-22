@@ -15,6 +15,7 @@ import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.UserService;
 
 /**
@@ -216,4 +217,10 @@ public interface UserDAO {
 	 * @see UserService#getLastLoginTime(User)
 	 */
 	String getLastLoginTime(User user);
+
+	/**
+	 * @param userId the id of a saved user
+	 * @return the user's type as stored in the database, or null if there is no such user
+	 */
+	UserType getStoredUserType(Integer userId);
 }

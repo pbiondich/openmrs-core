@@ -129,15 +129,18 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void saveUser_shouldPersistUserType() {
+	public void saveUser_shouldNotChangeAUsersType() {
 		User user = userService.getUser(502);
 		user.setUserType(UserType.SOFTWARE);
-		userService.saveUser(user);
+		user.setPerson(null);
 
-		Context.flushSession();
+		APIException e = assertThrows(APIException.class, () -> userService.saveUser(user));
+		assertEquals("A user's type cannot be changed", e.getMessage());
 		Context.clearSession();
 
-		assertEquals(UserType.SOFTWARE, userService.getUser(502).getUserType());
+		User stored = userService.getUser(502);
+		assertEquals(UserType.HUMAN, stored.getUserType());
+		assertNotNull(stored.getPerson());
 	}
 
 	@Test
@@ -158,6 +161,22 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 	public void getUser_shouldDefaultUserTypeToHumanForRowsInsertedWithoutOne() {
 		// standardTestDataset.xml has no user_type column, so the column default applies
 		assertEquals(UserType.HUMAN, userService.getUser(501).getUserType());
+	}
+
+	@Test
+	public void createUser_shouldCreateASoftwareUserWithoutAPersonThatUserSearchFinds() {
+		User extractor = new User();
+		extractor.setUsername("extractor");
+		extractor.setUserType(UserType.SOFTWARE);
+		userService.createUser(extractor, "Openmr5xy");
+
+		Context.flushSession();
+		Context.clearSession();
+
+		User saved = userService.getUserByUsername("extractor");
+		assertNull(saved.getPerson());
+		assertEquals(List.of(saved), userService.getUsers("extractor", null, false));
+		assertEquals(1, userService.getCountOfUsers("extractor", new ArrayList<>(), false).intValue());
 	}
 
 	@Test

@@ -89,7 +89,8 @@ public class User extends BaseOpenmrsObject implements java.io.Serializable, Att
 
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(name = "user_type", length = 50, nullable = false)
+	// a user's type is set when it is created and never changes
+	@Column(name = "user_type", length = 50, nullable = false, updatable = false)
 	// Liquibase owns the default in real databases; this gives the test schema generated from the mappings the same default
 	@ColumnDefault("'HUMAN'")
 	private UserType userType = UserType.HUMAN;
@@ -492,7 +493,8 @@ public class User extends BaseOpenmrsObject implements java.io.Serializable, Att
 	}
 
 	/**
-	 * @param userType the kind of principal this account represents
+	 * @param userType the kind of principal this account represents; it cannot be changed once the user
+	 *            is saved
 	 * @since 3.0.0
 	 */
 	public void setUserType(UserType userType) {

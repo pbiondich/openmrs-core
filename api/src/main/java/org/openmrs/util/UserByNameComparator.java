@@ -26,7 +26,8 @@ public class UserByNameComparator implements Comparator<User>, Serializable {
 
 	/**
 	 * <p>
-	 * <strong>Should</strong> sort users by personNames
+	 * <strong>Should</strong> sort users by personNames<br/>
+	 * <strong>Should</strong> sort users without a person name last, by username or systemId
 	 *
 	 * @see java.util.Comparator#compare(java.lang.Object, java.lang.Object)
 	 */
@@ -38,6 +39,11 @@ public class UserByNameComparator implements Comparator<User>, Serializable {
 			return 1;
 		} else if (user2 == null) {
 			return -1;
+		}
+
+		// users without a person name, such as software users, have nothing to compare by name
+		if (user1.getPersonName() == null && user2.getPersonName() == null) {
+			return OpenmrsUtil.compareWithNullAsGreatest(user1.toString(), user2.toString());
 		}
 
 		// delegate to the personByNameComparator to sort by person names
