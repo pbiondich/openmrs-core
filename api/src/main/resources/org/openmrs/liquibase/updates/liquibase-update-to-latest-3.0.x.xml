@@ -194,12 +194,7 @@
 	</changeSet>
 
 	<changeSet id="assertion-model-p1-daemon-user-software-2026-10-22" author="pbiondich">
-		<preConditions onFail="MARK_RAN">
-			<sqlCheck expectedResult="1">
-				SELECT count(*) FROM users WHERE uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB'
-			</sqlCheck>
-		</preConditions>
-		<comment>The Daemon user is software, not a person</comment>
+		<comment>The Daemon user is software, not a person. Updates nothing if there is no Daemon user.</comment>
 		<update tableName="users">
 			<column name="user_type" value="SOFTWARE"/>
 			<where>uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB'</where>

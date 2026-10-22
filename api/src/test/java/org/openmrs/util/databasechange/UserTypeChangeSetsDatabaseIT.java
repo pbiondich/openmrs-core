@@ -36,6 +36,7 @@ public class UserTypeChangeSetsDatabaseIT extends DatabaseIT {
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
+		startFromEmptyDatabase();
 		ChangeLogVersionFinder finder = new ChangeLogVersionFinder();
 		String latestSnapshot = finder.getLatestSnapshotVersion().get();
 		List<String> changeLogs = finder.getChangeLogCombinations().get(latestSnapshot);
@@ -55,6 +56,21 @@ public class UserTypeChangeSetsDatabaseIT extends DatabaseIT {
 		try (Connection connection = getConnection()) {
 			assertFalse(hasColumn(connection, "users", "user_type"));
 			assertFalse(isPersonIdNullable(connection));
+		}
+	}
+
+	/**
+	 * A container database arrives with the schema and updates already applied but no core data, so the
+	 * Daemon user would not exist when the changesets run. PostgreSQL also keeps the uuid() function
+	 * that the 3.0.x updates create, which dropping the tables leaves behind.
+	 */
+	private void startFromEmptyDatabase() throws SQLException {
+		dropAllDatabaseObjects();
+		if ("postgres".equalsIgnoreCase(System.getProperty("database"))) {
+			try (Connection connection = getConnection(); Statement statement = connection.createStatement()) {
+				statement.execute("DROP FUNCTION IF EXISTS uuid()");
+				connection.commit();
+			}
 		}
 	}
 
