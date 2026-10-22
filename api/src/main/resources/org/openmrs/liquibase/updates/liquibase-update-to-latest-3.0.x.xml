@@ -650,7 +650,7 @@
 			<column name="mime_type" type="VARCHAR(255)">
 				<constraints nullable="false"/>
 			</column>
-			<column name="sha256" type="CHAR(64)">
+			<column name="sha256" type="VARCHAR(64)">
 				<constraints nullable="false"/>
 			</column>
 			<column name="consent_status" type="VARCHAR(50)" defaultValue="NOT_RECORDED">
