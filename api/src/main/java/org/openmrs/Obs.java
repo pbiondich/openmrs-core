@@ -168,6 +168,8 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 
 	private Interpretation interpretation;
 
+	private Provider asserter;
+
 	private Status status = Status.FINAL;
 
 	private ObsReferenceRange referenceRange;
@@ -230,6 +232,7 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 		newObs.setVoidReason(obsToCopy.getVoidReason());
 		newObs.setStatus(obsToCopy.getStatus());
 		newObs.setInterpretation(obsToCopy.getInterpretation());
+		newObs.setAsserter(obsToCopy.getAsserter());
 		newObs.setOrder(obsToCopy.getOrder());
 
 		newObs.setValueComplex(obsToCopy.getValueComplex());
@@ -1283,6 +1286,26 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 	public void setInterpretation(Interpretation interpretation) {
 		markAsDirty(this.interpretation, interpretation);
 		this.interpretation = interpretation;
+	}
+
+	/**
+	 * @return the provider who made the claim this obs records, a person or a digital provider such as
+	 *         an extraction model; null if that is unknown
+	 * @since 3.0.0
+	 */
+	public Provider getAsserter() {
+		return asserter;
+	}
+
+	/**
+	 * @param asserter the provider who made the claim this obs records. If it is not set when the obs
+	 *            is saved, {@link org.openmrs.api.ObsService#saveObs(Obs, String)} fills it in where it
+	 *            can.
+	 * @since 3.0.0
+	 */
+	public void setAsserter(Provider asserter) {
+		markAsDirty(this.asserter, asserter);
+		this.asserter = asserter;
 	}
 
 	/**
