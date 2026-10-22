@@ -29,11 +29,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests the assertion model phase 1 changesets in liquibase-update-to-latest-3.0.x.xml:
  * users.user_type, a nullable users.person_id, the Daemon user as SOFTWARE, and the software_agent
- * table with a row for the Daemon user, and the phase 2 obs finalization policies.
+ * table with a row for the Daemon user, and the phase 2 obs finalization policies and attestations.
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 12;
+	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 13;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -64,6 +64,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertTrue(hasColumn(connection, "provider", "provider_type"));
 			assertEquals("AUTO_FINAL", getFinalizationAction(connection, "DEVICE"));
 			assertEquals("REQUIRE_ATTESTATION", getFinalizationAction(connection, "SOFTWARE"));
+			assertTrue(hasColumn(connection, "obs_attestation_item", "outcome"));
 		}
 
 		// the assertion model changesets are the last ones in the latest update file
@@ -79,6 +80,8 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "obs", "asserter_id"));
 			assertFalse(hasColumn(connection, "software_agent", "user_id"));
 			assertFalse(hasColumn(connection, "obs_finalization_policy", "action"));
+			assertFalse(hasColumn(connection, "obs_attestation_item", "outcome"));
+			assertFalse(hasColumn(connection, "obs_attestation", "attester_id"));
 			assertFalse(isPersonIdNullable(connection));
 			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}

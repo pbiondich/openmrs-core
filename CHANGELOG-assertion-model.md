@@ -65,3 +65,11 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   obs that was entered in error applies the same rule, and a voided obs's status cannot be changed. `min_score` from
   the plan waits for Phase 3, when there is a score to compare. Privileges `Get Obs Finalization Policies` and
   `Manage Obs Finalization Policies`.
+- `obs_attestation` (`ObsAttestation`: encounter, attester, attested_at) and `obs_attestation_item`
+  (`ObsAttestationItem`: obs, outcome `ACCEPTED` | `REJECTED` | `AMENDED` | `LEFT_PRELIMINARY`, superseding obs).
+  `AttestationService.attest(encounter, attester, items)` needs `Attest Obs`, now enforced, and an attester who is a
+  person's provider, not retired, and the authenticated user's own. An accepted obs, with the preliminary members of
+  its group, becomes `FINAL` on the same row through one guarded update, so it is not an edit; an amended obs is
+  replaced by the item's correction, saved `FINAL` with the attester as asserter, and voided as replaced; a rejected
+  obs stays `PRELIMINARY`, its item the only record of the rejection, as the plan leans. `getPendingForPatient` lists
+  the preliminary obs that no attestation rejected; `getObsAttestationItems` says what attestations made of an obs.

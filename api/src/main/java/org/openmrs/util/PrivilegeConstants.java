@@ -264,7 +264,7 @@ public class PrivilegeConstants {
 	 *
 	 * @since 3.0.0
 	 */
-	@AddOnStartup(description = "Able to attest preliminary observations, making them final (not yet enforced)")
+	@AddOnStartup(description = "Able to attest preliminary observations, making them final")
 	public static final String ATTEST_OBS = "Attest Obs";
 
 	/**
