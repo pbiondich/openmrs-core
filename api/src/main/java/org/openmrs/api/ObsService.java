@@ -146,10 +146,13 @@ public interface ObsService extends OpenmrsService {
 	public Obs saveObs(Obs obs, String changeMessage) throws APIException;
 
 	/**
-	 * Equivalent to deleting an observation
+	 * Equivalent to deleting an observation. Unless a newer version replaced it, the obs, and the
+	 * members of a group voided with it, are marked {@link Obs.Status#ENTERED_IN_ERROR}.
 	 * <p>
 	 * <strong>Should</strong> set voided bit on given obs<br/>
-	 * <strong>Should</strong> fail if reason parameter is empty
+	 * <strong>Should</strong> fail if reason parameter is empty<br/>
+	 * <strong>Should</strong> mark the obs entered in error<br/>
+	 * <strong>Should</strong> not mark a version a newer one replaced entered in error
 	 *
 	 * @param obs Obs to void
 	 * @param reason String reason it's being voided
@@ -161,10 +164,12 @@ public interface ObsService extends OpenmrsService {
 	public Obs voidObs(Obs obs, String reason) throws APIException;
 
 	/**
-	 * Revive an observation (pull a Lazarus)
+	 * Revive an observation (pull a Lazarus). An obs that was entered in error goes back to
+	 * {@link Obs.Status#FINAL}; the status it had before it was voided is not kept.
 	 * <p>
 	 * <strong>Should</strong> unset voided bit on given obs<br/>
-	 * <strong>Should</strong> cascade unvoid to child grouped obs
+	 * <strong>Should</strong> cascade unvoid to child grouped obs<br/>
+	 * <strong>Should</strong> put an obs entered in error back to final on the same row
 	 *
 	 * @param obs Obs to unvoid
 	 * @throws APIException

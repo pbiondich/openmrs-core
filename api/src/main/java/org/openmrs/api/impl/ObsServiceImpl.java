@@ -333,7 +333,9 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	}
 
 	/**
-	 * Voids an Obs If the Obs argument is an obsGroup, all group members will be voided.
+	 * Voids an Obs If the Obs argument is an obsGroup, all group members will be voided. The obs, and
+	 * the members voided with it, are marked {@link Obs.Status#ENTERED_IN_ERROR} unless a newer version
+	 * replaced it.
 	 *
 	 * @see org.openmrs.api.ObsService#voidObs(org.openmrs.Obs, java.lang.String)
 	 * @param obs the Obs to void
@@ -342,7 +344,23 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 */
 	@Override
 	public Obs voidObs(Obs obs, String reason) throws APIException {
+		// voiding a version that a newer one replaced is how an edit is saved, not an error
+		if (dao.withoutAutoFlush(() -> dao.getRevisionObs(obs)) == null) {
+			markEnteredInError(obs, obs.getDateVoided());
+		}
 		return dao.saveObs(obs);
+	}
+
+	private void markEnteredInError(Obs obs, Date dateVoided) {
+		obs.setStatus(Obs.Status.ENTERED_IN_ERROR);
+		if (obs.hasGroupMembers(true)) {
+			for (Obs member : obs.getGroupMembers(true)) {
+				// members voided earlier, on their own, keep the status they were voided with
+				if (member.getVoided() && OpenmrsUtil.nullSafeEquals(dateVoided, member.getDateVoided())) {
+					markEnteredInError(member, dateVoided);
+				}
+			}
+		}
 	}
 
 	/**

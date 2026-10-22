@@ -9,6 +9,7 @@
  */
 package org.openmrs.api.db.hibernate;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.openmrs.Obs;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +41,24 @@ public class ImmutableObsInterceptor extends ImmutableEntityInterceptor {
 	@Override
 	protected String[] getMutablePropertyNames() {
 		return MUTABLE_PROPERTY_NAMES;
+	}
+
+	/**
+	 * Lets the status leave {@link Obs.Status#ENTERED_IN_ERROR} when the obs is unvoided. Voiding is
+	 * already allowed, since changes to voided obs are ignored.
+	 *
+	 * @see ImmutableEntityInterceptor#isAllowedChange(String, Object[], Object[], String[])
+	 */
+	@Override
+	protected boolean isAllowedChange(String property, Object[] currentState, Object[] previousState,
+	        String[] propertyNames) {
+		if (!"status".equals(property) || previousState == null) {
+			return false;
+		}
+		int status = ArrayUtils.indexOf(propertyNames, "status");
+		int voided = ArrayUtils.indexOf(propertyNames, "voided");
+		return Obs.Status.ENTERED_IN_ERROR.equals(previousState[status]) && Boolean.TRUE.equals(previousState[voided])
+		        && Boolean.FALSE.equals(currentState[voided]);
 	}
 
 	/**
