@@ -52,6 +52,8 @@ public interface EncounterService extends OpenmrsService {
 	 * Saves a new encounter or updates an existing encounter. If an existing encounter, this method
 	 * will automatically apply encounter.patient to all encounter.obs.patient
 	 * <p>
+	 * <strong>Should</strong> record the current dictionary version on a new encounter<br/>
+	 * <strong>Should</strong> not record a version on a copy of an earlier encounter<br/>
 	 * <strong>Should</strong> save encounter with basic details<br/>
 	 * <strong>Should</strong> update encounter successfully<br/>
 	 * <strong>Should</strong> cascade save to contained obs<br/>

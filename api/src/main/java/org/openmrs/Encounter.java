@@ -26,6 +26,7 @@ import jakarta.persistence.AccessType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -105,6 +106,11 @@ public class Encounter extends BaseChangeableOpenmrsData {
 	@Cascade({ org.hibernate.annotations.CascadeType.MERGE, org.hibernate.annotations.CascadeType.PERSIST })
 	@JoinColumn(name = "visit_id")
 	private Visit visit;
+
+	// recorded when the encounter is entered and never changed after
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "dictionary_version_id", updatable = false)
+	private DictionaryVersion dictionaryVersion;
 
 	@OneToMany(mappedBy = "encounter", cascade = CascadeType.ALL)
 	@OrderBy("provider_id")
@@ -866,6 +872,7 @@ public class Encounter extends BaseChangeableOpenmrsData {
 		target.setForm(getForm());
 		target.setLocation(getLocation());
 		target.setPatient(patient);
+		target.setDictionaryVersion(getDictionaryVersion());
 
 		//encounter providers
 		for (EncounterProvider encounterProvider : getEncounterProviders()) {
@@ -992,5 +999,24 @@ public class Encounter extends BaseChangeableOpenmrsData {
 			        c.setVoidReason("Voided by the API");
 			        c.setVoidedBy(Context.getAuthenticatedUser());
 		        });
+	}
+
+	/**
+	 * @return the version of the concept dictionary in use when this encounter was entered, which is
+	 *         not its encounter datetime; null where that is unknown, as for encounters entered before
+	 *         versions were recorded or while no version was in use
+	 * @since 3.0.0
+	 */
+	public DictionaryVersion getDictionaryVersion() {
+		return dictionaryVersion;
+	}
+
+	/**
+	 * @param dictionaryVersion the version of the concept dictionary in use when this encounter was
+	 *            entered; it is saved with a new encounter and never changed after
+	 * @since 3.0.0
+	 */
+	public void setDictionaryVersion(DictionaryVersion dictionaryVersion) {
+		this.dictionaryVersion = dictionaryVersion;
 	}
 }

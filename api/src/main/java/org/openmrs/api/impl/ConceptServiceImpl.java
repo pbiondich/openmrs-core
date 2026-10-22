@@ -50,6 +50,7 @@ import org.openmrs.ConceptSearchResult;
 import org.openmrs.ConceptSet;
 import org.openmrs.ConceptSource;
 import org.openmrs.ConceptStopWord;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Drug;
 import org.openmrs.DrugIngredient;
 import org.openmrs.Obs;
@@ -2265,6 +2266,9 @@ public class ConceptServiceImpl extends BaseOpenmrsService implements ConceptSer
 		if (Concept.class.equals(type)) {
 			return (T) getConceptByUuid(uuid);
 		}
+		if (DictionaryVersion.class.equals(type)) {
+			return (T) getDictionaryVersionByUuid(uuid);
+		}
 		throw new APIException("Unsupported type for getRefByUuid: " + type != null ? type.getName() : "null");
 	}
 
@@ -2273,7 +2277,59 @@ public class ConceptServiceImpl extends BaseOpenmrsService implements ConceptSer
 		return Arrays.asList(ConceptSource.class, ConceptAttributeType.class, DrugIngredient.class, ConceptSet.class,
 		    ConceptAttribute.class, ConceptName.class, ConceptDatatype.class, ConceptMapType.class, ConceptNumeric.class,
 		    ConceptProposal.class, Drug.class, ConceptDescription.class, ConceptNameTag.class, ConceptClass.class,
-		    ConceptAnswer.class, ConceptReferenceTerm.class, ConceptReferenceRange.class, Concept.class);
+		    ConceptAnswer.class, ConceptReferenceTerm.class, ConceptReferenceRange.class, Concept.class,
+		    DictionaryVersion.class);
 	}
 
+	/**
+	 * @see org.openmrs.api.ConceptService#getDictionaryVersionByUuid(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DictionaryVersion getDictionaryVersionByUuid(String uuid) {
+		return dao.getDictionaryVersionByUuid(uuid);
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#getAllDictionaryVersions(boolean)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<DictionaryVersion> getAllDictionaryVersions(boolean includeRetired) {
+		return dao.getAllDictionaryVersions(includeRetired);
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#getCurrentDictionaryVersion()
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DictionaryVersion getCurrentDictionaryVersion() {
+		return dao.getDictionaryVersionInUseAt(new Date());
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#getDictionaryVersionByLabel(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public DictionaryVersion getDictionaryVersionByLabel(String label) {
+		return dao.getDictionaryVersionByLabel(label);
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#saveDictionaryVersion(DictionaryVersion)
+	 */
+	@Override
+	public DictionaryVersion saveDictionaryVersion(DictionaryVersion version) {
+		return dao.saveDictionaryVersion(version);
+	}
+
+	/**
+	 * @see org.openmrs.api.ConceptService#retireDictionaryVersion(DictionaryVersion, String)
+	 */
+	@Override
+	public DictionaryVersion retireDictionaryVersion(DictionaryVersion version, String reason) {
+		return dao.saveDictionaryVersion(version);
+	}
 }

@@ -76,3 +76,10 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   saved, all about one patient, and a group member with its own item follows that item. `getPendingForPatient` lists
   the preliminary obs that are not voided; `getObsAttestationItems` says
   what attestations made of an obs.
+- `dictionary_version` (`DictionaryVersion`, metadata: a unique label, CIEL, SNOMED and LOINC releases, and
+  `in_use_from`) and `encounter.dictionary_version_id`. The current version is the newest one, not retired, whose
+  `in_use_from` has passed; `EncounterService.saveEncounter` records it on each encounter entered now, unless the
+  caller set one, and the stamp is never changed after. A copy made by `transferEncounter` keeps the original's
+  version, even an unknown one. Existing encounters are not backfilled: null means unknown, which an "unknown" row
+  would only restate while making every encounter row change. `ConceptService` gets versions by uuid, by label and the
+  current one, and saves and retires them under the concept privileges.

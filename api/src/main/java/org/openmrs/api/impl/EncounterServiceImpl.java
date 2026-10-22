@@ -21,6 +21,7 @@ import java.util.Set;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Cohort;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterRole;
 import org.openmrs.EncounterType;
@@ -108,6 +109,12 @@ public class EncounterServiceImpl extends BaseOpenmrsService implements Encounte
 
 		// check permissions
 		boolean isNewEncounter = requirePrivilege(encounter);
+
+		// a copy of an earlier encounter, as transferEncounter makes, keeps the original's creation and its
+		// version, even an unknown one; only an encounter entered now records the current version
+		if (isNewEncounter && encounter.getDateCreated() == null && encounter.getDictionaryVersion() == null) {
+			encounter.setDictionaryVersion(currentDictionaryVersion());
+		}
 
 		// This must be done after setting dateCreated etc on the obs because
 		// of the way the ORM tools flush things and check for nullity
@@ -409,6 +416,18 @@ public class EncounterServiceImpl extends BaseOpenmrsService implements Encounte
 		// the second search parameter is null as it defaults to authenticated user from context
 		return Context.getEncounterService().filterEncountersByViewPermissions(dao.getEncounters(encounterSearchCriteria),
 		    null);
+	}
+
+	/**
+	 * The dictionary version in use now, which a new encounter records, or null if none is set.
+	 */
+	private DictionaryVersion currentDictionaryVersion() {
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+			return Context.getConceptService().getCurrentDictionaryVersion();
+		} finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+		}
 	}
 
 	/**
