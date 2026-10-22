@@ -995,7 +995,8 @@ public class ObsValidatorTest extends BaseContextSensitiveTest {
 	@Test
 	public void validate_shouldFailForASpanThatDoesNotFollowTheGrammar() {
 		for (String span : new String[] { "", "t=58-42", "t=1-2;t=3-4", "c=abc", "xywh=1,2,3", "c=1-2field=x",
-		        "field=has space", "<script>", "Field=x", "t=1-2;" }) {
+		        "field=has space", "<script>", "Field=x", "t=1-2;", ";field=x", "field=<img/src=x/onerror=alert(1)>",
+		        "t=1-2;field=a\"b" }) {
 			assertFalse(
 			    ObsValidator.spanFits(span, Capture.Kind.AUDIO) || ObsValidator.spanFits(span, Capture.Kind.TYPED_TEXT)
 			            || ObsValidator.spanFits(span, Capture.Kind.SCANNED_FORM),
@@ -1036,6 +1037,52 @@ public class ObsValidatorTest extends BaseContextSensitiveTest {
 		obsValidator.validate(obs, errors);
 
 		assertTrue(errors.hasFieldErrors("derivation"));
+	}
+
+	@Test
+	public void validate_shouldFailForACaptureOnAnObsWithoutAnEncounter() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, null);
+		obs.setEncounter(null);
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("capture"));
+	}
+
+	@Test
+	public void validate_shouldFailForACaptureOfAnotherPatient() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, null);
+		obs.setPerson(Context.getPersonService().getPerson(2));
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("capture"));
+	}
+
+	@Test
+	public void validate_shouldFailForANewObsPointingToAVoidedCapture() {
+		Obs obs = provenanceObs(Capture.Kind.SCANNED_FORM, null);
+		obs.getCapture().setVoided(true);
+
+		Errors errors = new BindException(obs, "obs");
+		obsValidator.validate(obs, errors);
+
+		assertTrue(errors.hasFieldErrors("capture"));
+	}
+
+	@Test
+	public void validate_shouldFailForASpanOnAGroupMemberThatIsTooLong() {
+		Obs member = provenanceObs(Capture.Kind.SCANNED_FORM, "field=" + "a".repeat(250));
+		Obs group = new Obs(member.getPerson(), Context.getConceptService().getConcept(23), new Date(), null);
+		group.setEncounter(member.getEncounter());
+		group.addGroupMember(member);
+
+		Errors errors = new BindException(group, "obs");
+		obsValidator.validate(group, errors);
+
+		assertTrue(errors.hasFieldErrors("groupMembers"));
 	}
 
 	private Obs provenanceObs(Capture.Kind kind, String span) {

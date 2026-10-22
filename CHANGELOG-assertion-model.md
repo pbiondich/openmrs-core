@@ -105,5 +105,10 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
 - `obs.capture_id`, `obs.span` (VARCHAR(255)) and `obs.derivation_id`: where an obs was taken from. The span is a
   varchar grammar: a locator `t=<seconds>-<seconds>` (audio, video), `xywh=<x>,<y>,<w>,<h>` (pages and images) or
   `c=<from>-<to>` (typed text), and/or `;`-separated `name=value` parameters such as `field=chest_indrawing`.
-  `ObsValidator` checks that a span has a capture, follows the grammar and fits the capture's kind, that the capture
-  is of the obs's encounter, and that a derivation is over the same capture. An edited obs keeps all three.
+  Region units are image pixels, or points on a PDF page; `c=` counts Unicode code points; `page=` is reserved for
+  the page of a multi-page capture; values are letters, digits and `_ . : -` only. `ObsValidator` checks that a span
+  has a capture, follows the grammar and fits the capture's kind, that the capture is of the obs's own encounter and
+  patient, that a derivation is over the same capture, and that a new obs points to no voided capture or derivation.
+  An edited obs keeps all three; `transferEncounter`'s copies drop them, since the capture stays with the encounter it
+  was captured in, and the voided originals keep them. Adding the two foreign keys rebuilds `obs` on MySQL, as the
+  asserter changeset already does.

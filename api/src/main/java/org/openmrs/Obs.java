@@ -1346,7 +1346,7 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 	 * @return where in its capture this obs was taken from, such as <code>t=42.0-58.0</code> in a
 	 *         recording, <code>xywh=412,880,60,24;field=chest_indrawing</code> on a page or
 	 *         <code>c=120-184</code> in text; null for the whole capture
-	 * @see org.openmrs.validator.ObsValidator
+	 * @see org.openmrs.validator.ObsValidator for the grammar and its units
 	 * @since 3.0.0
 	 */
 	public String getSpan() {

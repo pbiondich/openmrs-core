@@ -390,6 +390,47 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void createDerivation_shouldJudgeTheCaptureAsSavedNotAsPassedIn() {
+		Capture voided = captureService.voidCapture(create(Kind.SCANNED_FORM, "application/pdf"), "wrong patient");
+		Context.flushSession();
+		Context.evictFromSession(voided);
+		Capture stale = new Capture();
+		stale.setCaptureId(voided.getCaptureId());
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation(stale)));
+	}
+
+	@Test
+	public void getDerivationByUuid_shouldGetADerivationByItsUuid() {
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertEquals(derivation, captureService.getDerivationByUuid(derivation.getUuid()));
+	}
+
+	@Test
+	public void transferEncounter_shouldMoveObsTakenFromACaptureWithoutTheirCapture() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+		Obs obs = new Obs(encounter.getPatient(), Context.getConceptService().getConcept(5089), new Date(), null);
+		obs.setEncounter(encounter);
+		obs.setValueNumeric(50.0);
+		obs.setCapture(capture);
+		obs.setSpan("xywh=412,880,60,24;field=weight");
+		obs.setDerivation(captureService.createDerivation(derivation(capture)));
+		encounter.addObs(obs);
+		Context.getObsService().saveObs(obs, null);
+
+		Encounter moved = Context.getEncounterService().transferEncounter(encounter,
+		    Context.getPatientService().getPatient(2));
+
+		Obs copy = moved.getAllObs().stream().filter(o -> Double.valueOf(50.0).equals(o.getValueNumeric())).findFirst()
+		        .orElseThrow();
+		assertNull(copy.getCapture());
+		assertNull(copy.getSpan());
+		assertNull(copy.getDerivation());
+		assertEquals(capture, Context.getObsService().getObsByUuid(obs.getUuid()).getCapture());
+	}
+
+	@Test
 	public void createDerivation_shouldFailForADerivationThatIsAlreadySaved() {
 		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
 

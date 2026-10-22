@@ -208,9 +208,12 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	@Override
 	public Derivation createDerivation(Derivation derivation) {
 		if (derivation.getDerivationId() != null || derivation.getCapture() == null || derivation.getStarted() == null
-		        || derivation.getFinished() == null || derivation.getFinished().before(derivation.getStarted())) {
+		        || derivation.getFinished() == null || derivation.getFinished().before(derivation.getStarted())
+		        || (derivation.getParamsHash() != null && derivation.getParamsHash().length() > 255)) {
 			throw new APIException("Derivation.error.invalid", (Object[]) null);
 		}
+		// whether the capture is voided goes by the database, not the object passed in
+		derivation.setCapture(saved(derivation.getCapture()));
 		if (derivation.getCapture().getVoided()) {
 			throw new APIException("Derivation.error.captureVoided", new Object[] { derivation.getCapture().getUuid() });
 		}

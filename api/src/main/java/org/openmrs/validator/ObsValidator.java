@@ -11,6 +11,7 @@ package org.openmrs.validator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -21,6 +22,8 @@ import org.openmrs.ConceptDatatype;
 import org.openmrs.ConceptNumeric;
 import org.openmrs.ConceptReferenceRange;
 import org.openmrs.ConceptReferenceRangeContext;
+import org.openmrs.Derivation;
+import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.ObsReferenceRange;
 import org.openmrs.annotation.Handler;
@@ -416,12 +419,23 @@ public class ObsValidator implements Validator {
 
 	/**
 	 * A span is a locator, a set of <code>;</code> separated <code>name=value</code> parameters, or a
-	 * locator followed by them: <code>t=42.0-58.0</code> (seconds into a recording),
-	 * <code>xywh=412,880,60,24;field=chest_indrawing</code> (a region of a page or image, in pixels),
-	 * <code>c=120-184</code> (characters into text) or <code>field=chest_indrawing</code>.
+	 * locator followed by them:
+	 * <ul>
+	 * <li><code>t=42.0-58.0</code>: seconds into a recording</li>
+	 * <li><code>xywh=412,880,60,24</code>: a region of an image in its pixels, or of a PDF page in
+	 * points, from the top left</li>
+	 * <li><code>c=120-184</code>: Unicode code points into text, from 0, end exclusive</li>
+	 * <li>parameters such as <code>field=chest_indrawing</code>; <code>page=2</code> (from 1) is
+	 * reserved for the page of a multi-page capture</li>
+	 * </ul>
+	 * Values are letters, digits and <code>_ . : -</code> only, so a span can be shown as is.
 	 */
+	private static final String PARAMETER = "(?!(?:t|xywh|c)=)[a-z][a-z0-9_]*=[A-Za-z0-9_.:-]+";
+
 	private static final Pattern SPAN = Pattern
-	        .compile("(?:(t|xywh|c)=([0-9.,-]+))?(?:(?:^|;)(?!(?:t|xywh|c)=)[a-z][a-z0-9_]*=[^;\\s]+)*");
+	        .compile("(t|xywh|c)=([0-9.,-]+)(?:;" + PARAMETER + ")*|" + PARAMETER + "(?:;" + PARAMETER + ")*");
+
+	private static final int SPAN_LENGTH = 255;
 
 	private static final Pattern TIME = Pattern.compile("(\\d+(?:\\.\\d+)?)-(\\d+(?:\\.\\d+)?)");
 
@@ -431,18 +445,35 @@ public class ObsValidator implements Validator {
 
 	/**
 	 * Checks that an obs's capture, span and derivation agree: a span needs a capture and must fit its
-	 * kind, the capture must be of the obs's encounter, and a derivation must be over the same capture.
+	 * kind; the capture must be of the obs's own encounter and patient; a derivation must be over the
+	 * same capture; and a new obs may not point to a voided capture or derivation.
 	 */
 	private void validateProvenance(Obs obs, Errors errors, boolean atRootNode) {
 		Capture capture = obs.getCapture();
-		if (obs.getSpan() != null && (capture == null || !spanFits(obs.getSpan(), capture.getKind()))) {
-			reject(errors, atRootNode, "span", capture == null ? "Obs.error.spanWithoutCapture" : "Obs.error.span");
+		Derivation derivation = obs.getDerivation();
+		String span = obs.getSpan();
+		if (span != null) {
+			if (capture == null) {
+				reject(errors, atRootNode, "span", "Obs.error.spanWithoutCapture");
+			} else if (span.length() > SPAN_LENGTH || !spanFits(span, capture.getKind())) {
+				reject(errors, atRootNode, "span", "Obs.error.span");
+			}
 		}
-		if (capture != null && obs.getEncounter() != null && !obs.getEncounter().equals(capture.getEncounter())) {
-			reject(errors, atRootNode, "capture", "Obs.error.captureOfAnotherEncounter");
+		if (capture != null) {
+			Encounter encounter = capture.getEncounter();
+			if (obs.getEncounter() == null || !obs.getEncounter().equals(encounter)
+			        || !Objects.equals(obs.getPersonId(), encounter.getPatient().getPatientId())) {
+				reject(errors, atRootNode, "capture", "Obs.error.captureOfAnotherEncounter");
+			}
 		}
-		if (obs.getDerivation() != null && (capture == null || !capture.equals(obs.getDerivation().getCapture()))) {
+		if (derivation != null && (capture == null || !capture.equals(derivation.getCapture()))) {
 			reject(errors, atRootNode, "derivation", "Obs.error.derivationOfAnotherCapture");
+		}
+		// an existing obs keeps its links even once they are voided; only a new link is refused
+		if (obs.getObsId() == null
+		        && ((capture != null && capture.getVoided()) || (derivation != null && derivation.getVoided()))) {
+			reject(errors, atRootNode, capture != null && capture.getVoided() ? "capture" : "derivation",
+			    "Obs.error.voidedProvenance");
 		}
 	}
 
@@ -459,7 +490,7 @@ public class ObsValidator implements Validator {
 	 */
 	static boolean spanFits(String span, Capture.Kind kind) {
 		Matcher matcher = SPAN.matcher(span);
-		if (span.isEmpty() || !matcher.matches()) {
+		if (!matcher.matches()) {
 			return false;
 		}
 		String locator = matcher.group(1);

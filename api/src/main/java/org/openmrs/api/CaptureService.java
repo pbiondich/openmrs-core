@@ -160,6 +160,7 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> default the agent and dictionary version<br/>
 	 * <strong>Should</strong> fail for a run that finished before it started<br/>
 	 * <strong>Should</strong> fail for a voided capture<br/>
+	 * <strong>Should</strong> judge the capture as saved, not as passed in<br/>
 	 * <strong>Should</strong> fail for a derivation that is already saved
 	 *
 	 * @param derivation a new derivation, with its capture and when it started and finished
@@ -171,6 +172,8 @@ public interface CaptureService extends OpenmrsService {
 	Derivation createDerivation(Derivation derivation);
 
 	/**
+	 * <strong>Should</strong> get a derivation by its uuid
+	 *
 	 * @param uuid the uuid of a derivation
 	 * @return the derivation, or null if there is none with that uuid
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
@@ -181,7 +184,7 @@ public interface CaptureService extends OpenmrsService {
 
 	/**
 	 * @param capture a capture
-	 * @return the derivations over it that are not voided, oldest first
+	 * @return the derivations over it that are not voided, in the order they were recorded
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
 	 */
