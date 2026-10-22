@@ -235,6 +235,13 @@ public final class OpenmrsConstants {
 
 	public static final String GLOBAL_PROPERTY_CONCEPTS_LOCKED = "concepts.locked";
 
+	/**
+	 * The uuid of the dictionary version in use now, which new encounters record.
+	 *
+	 * @since 3.0.0
+	 */
+	public static final String GLOBAL_PROPERTY_DICTIONARY_VERSION = "concept.dictionaryVersion";
+
 	public static final String GLOBAL_PROPERTY_PATIENT_LISTING_ATTRIBUTES = "patient.listingAttributeTypes";
 
 	public static final String GLOBAL_PROPERTY_PATIENT_VIEWING_ATTRIBUTES = "patient.viewingAttributeTypes";
@@ -745,6 +752,9 @@ public final class OpenmrsConstants {
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_CONCEPTS_LOCKED, "false", "if true, do not allow editing concepts",
 		        BooleanDatatype.class, null));
+
+		props.add(new GlobalProperty(GLOBAL_PROPERTY_DICTIONARY_VERSION, "",
+		        "The uuid of the dictionary version in use now; each new encounter records it"));
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_PATIENT_LISTING_ATTRIBUTES, "",
 		        "A comma delimited list of PersonAttributeType names that should be displayed for patients in _lists_"));

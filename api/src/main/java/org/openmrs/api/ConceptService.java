@@ -37,6 +37,7 @@ import org.openmrs.ConceptSearchResult;
 import org.openmrs.ConceptSet;
 import org.openmrs.ConceptSource;
 import org.openmrs.ConceptStopWord;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Drug;
 import org.openmrs.DrugIngredient;
 import org.openmrs.Person;
@@ -2602,4 +2603,50 @@ public interface ConceptService extends OpenmrsService {
 	 */
 	@PreAuthorize("hasPermission(#conceptReferenceRange, '" + PrivilegeConstants.PURGE_CONCEPTS + "')")
 	void purgeConceptReferenceRange(ConceptReferenceRange conceptReferenceRange);
+
+	/**
+	 * @param uuid the uuid of a dictionary version
+	 * @return the version, or null if there is none with that uuid
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CONCEPTS + "')")
+	DictionaryVersion getDictionaryVersionByUuid(String uuid);
+
+	/**
+	 * @param includeRetired whether to include retired versions
+	 * @return the dictionary versions, oldest first
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CONCEPTS + "')")
+	List<DictionaryVersion> getAllDictionaryVersions(boolean includeRetired);
+
+	/**
+	 * The version of the dictionary in use now: the one the global property
+	 * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_DICTIONARY_VERSION} names by uuid.
+	 * <p>
+	 * <strong>Should</strong> return the version the global property names<br/>
+	 * <strong>Should</strong> return null when the global property names none
+	 *
+	 * @return the current version, or null if none is set
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CONCEPTS + "')")
+	DictionaryVersion getCurrentDictionaryVersion();
+
+	/**
+	 * @param version the version to save
+	 * @return the saved version
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.MANAGE_CONCEPTS + "')")
+	DictionaryVersion saveDictionaryVersion(DictionaryVersion version);
+
+	/**
+	 * @param version the version to retire
+	 * @param reason why it is retired
+	 * @return the retired version
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.MANAGE_CONCEPTS + "')")
+	DictionaryVersion retireDictionaryVersion(DictionaryVersion version, String reason);
 }

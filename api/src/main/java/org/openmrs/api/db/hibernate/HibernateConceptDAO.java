@@ -68,6 +68,7 @@ import org.openmrs.ConceptSearchResult;
 import org.openmrs.ConceptSet;
 import org.openmrs.ConceptSource;
 import org.openmrs.ConceptStopWord;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Drug;
 import org.openmrs.DrugIngredient;
 import org.openmrs.DrugReferenceMap;
@@ -2568,5 +2569,31 @@ public class HibernateConceptDAO implements ConceptDAO {
 			    conceptIds.size() - concepts.size());
 		}
 		return concepts;
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ConceptDAO#getDictionaryVersionByUuid(String)
+	 */
+	@Override
+	public DictionaryVersion getDictionaryVersionByUuid(String uuid) {
+		return HibernateUtil.getUniqueEntityByUUID(sessionFactory, DictionaryVersion.class, uuid);
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ConceptDAO#getAllDictionaryVersions(boolean)
+	 */
+	@Override
+	public List<DictionaryVersion> getAllDictionaryVersions(boolean includeRetired) {
+		String hql = "from DictionaryVersion" + (includeRetired ? "" : " where retired = false")
+		        + " order by dictionaryVersionId";
+		return sessionFactory.getCurrentSession().createQuery(hql, DictionaryVersion.class).list();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ConceptDAO#saveDictionaryVersion(DictionaryVersion)
+	 */
+	@Override
+	public DictionaryVersion saveDictionaryVersion(DictionaryVersion version) {
+		return HibernateUtil.saveOrUpdate(sessionFactory.getCurrentSession(), version);
 	}
 }

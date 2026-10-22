@@ -37,6 +37,7 @@ import org.openmrs.ConceptSearchResult;
 import org.openmrs.ConceptSet;
 import org.openmrs.ConceptSource;
 import org.openmrs.ConceptStopWord;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Drug;
 import org.openmrs.DrugIngredient;
 import org.openmrs.api.APIException;
@@ -709,4 +710,19 @@ public interface ConceptDAO {
 	 * @see ConceptService#purgeConceptReferenceRange(org.openmrs.ConceptReferenceRange)
 	 */
 	void purgeConceptReferenceRange(ConceptReferenceRange conceptReferenceRange);
+
+	/**
+	 * @since 3.0.0
+	 */
+	DictionaryVersion getDictionaryVersionByUuid(String uuid);
+
+	/**
+	 * @since 3.0.0
+	 */
+	List<DictionaryVersion> getAllDictionaryVersions(boolean includeRetired);
+
+	/**
+	 * @since 3.0.0
+	 */
+	DictionaryVersion saveDictionaryVersion(DictionaryVersion version);
 }
