@@ -163,9 +163,10 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 			throw new APIException("ObsAttestation.error.otherEncounter", new Object[] { obs.getUuid() });
 		}
 		boolean amended = item.getOutcome() == ObsAttestationItem.Outcome.AMENDED;
-		if (amended != (item.getSupersedingObs() != null)
-		        || (amended && (item.getSupersedingObs().getObsId() != null || obs.isObsGrouping()))) {
-			// an amendment carries one new obs, replacing a single obs; nothing else carries one
+		if (amended != (item.getSupersedingObs() != null) || (amended && (item.getSupersedingObs().getObsId() != null
+		        || obs.isObsGrouping() || item.getSupersedingObs().hasGroupMembers(true)))) {
+			// an amendment carries one new obs, without members of its own, replacing a single obs; nothing else
+			// carries one
 			throw new APIException("ObsAttestation.error.invalidAmendment", new Object[] { obs.getUuid() });
 		}
 	}
@@ -206,6 +207,10 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		}
 		correction.setAsserter(attester);
 		correction.setStatus(Obs.Status.FINAL);
+		// the correction is entered now, by the attester, whatever the caller put on it
+		correction.setCreator(null);
+		correction.setDateCreated(null);
+		correction.setVoided(false);
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.ADD_OBS);
 			Context.addProxyPrivilege(PrivilegeConstants.EDIT_OBS);

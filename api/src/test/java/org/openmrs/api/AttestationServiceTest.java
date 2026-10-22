@@ -140,6 +140,20 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void attest_shouldFailForACorrectionWithMembersOfItsOwn() {
+		Obs obs = preliminaryObs(50d);
+		ObsAttestationItem item = new ObsAttestationItem(obs, Outcome.AMENDED);
+		Obs correction = new Obs();
+		correction.setValueNumeric(55d);
+		Obs smuggled = newObs(60d);
+		smuggled.setStatus(Obs.Status.FINAL);
+		correction.addGroupMember(smuggled);
+		item.setSupersedingObs(correction);
+
+		assertThrows(APIException.class, () -> attest(item));
+	}
+
+	@Test
 	public void attest_shouldFailForAnAttesterWhoIsNotAPerson() {
 		Obs obs = preliminaryObs(50d);
 
