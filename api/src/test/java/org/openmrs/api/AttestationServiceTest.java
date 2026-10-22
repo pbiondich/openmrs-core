@@ -128,6 +128,18 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void attest_shouldAcceptAnObsSavedInTheSameSessionWithAReferenceRange() {
+		Obs obs = newObs(70d);
+		obs.setConcept(Context.getConceptService().getConcept(5089));
+		obs.setAsserter(extractor);
+		Context.getObsService().saveObs(obs, null);
+
+		attest(new ObsAttestationItem(obs, Outcome.ACCEPTED));
+
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
 	public void attest_shouldFailForAnAttesterWhoIsNotAPerson() {
 		Obs obs = preliminaryObs(50d);
 

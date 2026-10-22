@@ -132,6 +132,9 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		if (obs == null || obs.getObsId() == null) {
 			throw new APIException("ObsAttestation.error.invalidItem", (Object[]) null);
 		}
+		// write out anything pending first: evicting an obs cascades to its reference range, which may
+		// still be waiting to be inserted
+		Context.flushSession();
 		Context.evictFromSession(obs);
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.GET_OBS);
