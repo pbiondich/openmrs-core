@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.util.RoleConstants;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -90,6 +91,16 @@ public class UserTest {
 	@Test
 	public void containsRole_shouldReturnFalseIfTheUserDoesNotHaveTheGivenRole() {
 		assertFalse(user.containsRole(ROLE_WHICH_DOES_NOT_EXIT));
+	}
+
+	@Test
+	public void getUserType_shouldDefaultToHuman() {
+		assertEquals(UserType.HUMAN, new User().getUserType());
+	}
+
+	@Test
+	public void getNames_shouldReturnEmptySetWhenUserHasNoPerson() {
+		assertTrue(new User().getNames().isEmpty());
 	}
 
 }

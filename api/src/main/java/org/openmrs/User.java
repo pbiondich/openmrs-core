@@ -25,6 +25,8 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,8 +44,11 @@ import org.hibernate.annotations.Cache;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.Cascade;
 import org.hibernate.annotations.CascadeType;
+import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.NotAudited;
+import org.hibernate.type.SqlTypes;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.LocaleUtility;
 import org.openmrs.util.OpenmrsConstants;
@@ -78,9 +83,16 @@ public class User extends BaseOpenmrsObject implements java.io.Serializable, Att
 	private Integer userId;
 
 	@ManyToOne(fetch = FetchType.EAGER)
-	@JoinColumn(name = "person_id", nullable = false)
+	@JoinColumn(name = "person_id")
 	@Cascade({ CascadeType.MERGE, CascadeType.PERSIST })
 	private Person person;
+
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(name = "user_type", length = 50, nullable = false)
+	// Liquibase owns the default in real databases; this gives the test schema generated from the mappings the same default
+	@ColumnDefault("'HUMAN'")
+	private UserType userType = UserType.HUMAN;
 
 	@Column(name = "system_id", nullable = false, length = 50)
 	private String systemId;
@@ -472,6 +484,22 @@ public class User extends BaseOpenmrsObject implements java.io.Serializable, Att
 	}
 
 	/**
+	 * @return the kind of principal this account represents
+	 * @since 3.0.0
+	 */
+	public UserType getUserType() {
+		return userType;
+	}
+
+	/**
+	 * @param userType the kind of principal this account represents
+	 * @since 3.0.0
+	 */
+	public void setUserType(UserType userType) {
+		this.userType = userType;
+	}
+
+	/**
 	 * @return Returns the username.
 	 */
 	public String getUsername() {
@@ -604,10 +632,11 @@ public class User extends BaseOpenmrsObject implements java.io.Serializable, Att
 	}
 
 	/**
+	 * @return the names of this user's person, or an empty, unmodifiable set if the user has no person
 	 * @see org.openmrs.Person#getNames()
 	 */
 	public Set<PersonName> getNames() {
-		return person.getNames();
+		return person == null ? Collections.emptySet() : person.getNames();
 	}
 
 	/**

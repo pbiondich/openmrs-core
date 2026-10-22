@@ -163,4 +163,48 @@
 		<customChange class="org.openmrs.util.databasechange.CheckConceptReferenceRangeCriteriaChangeSet"/>
 	</changeSet>
 
+	<!-- Assertion model, phase 1: typed principals. See CHANGELOG-assertion-model.md -->
+
+	<changeSet id="assertion-model-p1-users-user-type-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="users" columnName="user_type"/>
+			</not>
+		</preConditions>
+		<comment>Add users.user_type (HUMAN | DEVICE | SOFTWARE); existing users become HUMAN</comment>
+		<addColumn tableName="users">
+			<column name="user_type" type="VARCHAR(50)" defaultValue="HUMAN">
+				<constraints nullable="false"/>
+			</column>
+		</addColumn>
+		<rollback>
+			<dropColumn tableName="users" columnName="user_type"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p1-users-person-id-nullable-2026-10-22" author="pbiondich">
+		<comment>
+			Make users.person_id nullable so DEVICE and SOFTWARE users need no person row.
+			Rolling back fails while any user has a null person_id; give those users a person or delete them first.
+		</comment>
+		<dropNotNullConstraint tableName="users" columnName="person_id" columnDataType="INT"/>
+		<rollback>
+			<addNotNullConstraint tableName="users" columnName="person_id" columnDataType="INT"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p1-daemon-user-software-2026-10-22" author="pbiondich">
+		<comment>The Daemon user is software, not a person. Updates nothing if there is no Daemon user.</comment>
+		<update tableName="users">
+			<column name="user_type" value="SOFTWARE"/>
+			<where>uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB'</where>
+		</update>
+		<rollback>
+			<update tableName="users">
+				<column name="user_type" value="HUMAN"/>
+				<where>uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB'</where>
+			</update>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

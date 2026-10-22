@@ -1,0 +1,67 @@
+# Builds the assertion model branches of this fork. build.yaml only runs for master, so without
+# this the assertion-model PRs carry no checks. It runs on push rather than pull_request: the
+# PRs are stacked, each based on the branch below it, and a push run reports on the PR's head
+# commit either way without running everything twice.
+name: Build assertion model branches
+
+on:
+  push:
+    branches:
+      - 'assertion-model/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Unit tests
+            install: ''
+            test: mvn test --batch-mode
+          - name: Integration tests (H2)
+            install: -Dspotbugs.skip=true
+            test: mvn test -Pintegration-test -Pskip-default-test --batch-mode
+          # The migration tests apply and roll back the 3.0.x changesets on a real database,
+          # which H2 does not prove; MariaDB stands in for MySQL (see Containers). The H2 leg
+          # already runs ValidateHibernateMappingsDatabaseIT, which cannot build its schema here.
+          # The other upstream DatabaseITs are left out because two of them fail on PostgreSQL
+          # upstream (the uuid-ossp extension, and audit tables for two tables). Each test class
+          # gets its own JVM, and so its own container: on PostgreSQL DatabaseUpdaterDatabaseIT
+          # counts the wrong changesets when another DatabaseIT ran before it in the same JVM
+          - name: Migration tests (PostgreSQL)
+            install: -pl api -am -Dspotbugs.skip=true
+            test: >-
+              mvn surefire:test --batch-mode -pl api -DreuseForks=false
+              -Dtest='*ChangeSetsDatabaseIT,DatabaseUpdaterDatabaseIT'
+              -DuseInMemoryDatabase=false -Ddatabase=postgres
+          - name: Migration tests (MariaDB)
+            install: -pl api -am -Dspotbugs.skip=true
+            test: >-
+              mvn surefire:test --batch-mode -pl api -DreuseForks=false
+              -Dtest='*ChangeSetsDatabaseIT,DatabaseUpdaterDatabaseIT'
+              -DuseInMemoryDatabase=false -Ddatabase=mariadb
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup JDK
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: 'maven'
+      - name: Install dependencies
+        run: mvn clean install -DskipTests=true -D"maven.javadoc.skip"=true ${{ matrix.install }} --batch-mode --show-version --file pom.xml
+      - name: Test
+        run: ${{ matrix.test }}
