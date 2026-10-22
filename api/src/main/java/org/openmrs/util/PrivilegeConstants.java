@@ -267,6 +267,18 @@ public class PrivilegeConstants {
 	@AddOnStartup(description = "Able to attest preliminary observations, making them final (not yet enforced)")
 	public static final String ATTEST_OBS = "Attest Obs";
 
+	/**
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to get the policies that say which agents' observations need attestation")
+	public static final String GET_OBS_FINALIZATION_POLICIES = "Get Obs Finalization Policies";
+
+	/**
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to add/edit/retire the policies that say which agents' observations need attestation")
+	public static final String MANAGE_OBS_FINALIZATION_POLICIES = "Manage Obs Finalization Policies";
+
 	@AddOnStartup(description = "Able to edit patient notes")
 	public static final String EDIT_NOTE = "Edit Notes";
 

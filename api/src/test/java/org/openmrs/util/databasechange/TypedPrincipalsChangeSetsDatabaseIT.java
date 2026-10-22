@@ -29,11 +29,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests the assertion model phase 1 changesets in liquibase-update-to-latest-3.0.x.xml:
  * users.user_type, a nullable users.person_id, the Daemon user as SOFTWARE, and the software_agent
- * table with a row for the Daemon user.
+ * table with a row for the Daemon user, and the phase 2 obs finalization policies.
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 10;
+	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 12;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -62,11 +62,13 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertTrue(hasColumn(connection, "device_agent", "user_id"));
 			assertTrue(hasColumn(connection, "provider", "user_id"));
 			assertTrue(hasColumn(connection, "provider", "provider_type"));
+			assertEquals("AUTO_FINAL", getFinalizationAction(connection, "DEVICE"));
+			assertEquals("REQUIRE_ATTESTATION", getFinalizationAction(connection, "SOFTWARE"));
 		}
 
-		// the typed principals changesets are the last ones in the latest update file
+		// the assertion model changesets are the last ones in the latest update file
 		Liquibase liquibase = getLiquibase(changeLogs.get(changeLogs.size() - 1));
-		liquibase.rollback(TYPED_PRINCIPALS_CHANGE_SET_COUNT, (String) null);
+		liquibase.rollback(ASSERTION_MODEL_CHANGE_SET_COUNT, (String) null);
 		liquibase.getDatabase().getConnection().commit();
 
 		try (Connection connection = getConnection()) {
@@ -76,6 +78,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "provider", "provider_type"));
 			assertFalse(hasColumn(connection, "obs", "asserter_id"));
 			assertFalse(hasColumn(connection, "software_agent", "user_id"));
+			assertFalse(hasColumn(connection, "obs_finalization_policy", "action"));
 			assertFalse(isPersonIdNullable(connection));
 			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}
@@ -86,6 +89,15 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 	 * Daemon user would not exist when the changesets run. PostgreSQL also keeps the uuid() function
 	 * that the 3.0.x updates create, which dropping the tables leaves behind.
 	 */
+	private String getFinalizationAction(Connection connection, String agentType) throws SQLException {
+		try (Statement statement = connection.createStatement();
+		        ResultSet rs = statement.executeQuery("SELECT action FROM obs_finalization_policy WHERE agent_type = '"
+		                + agentType + "' AND concept_class_id IS NULL")) {
+			assertTrue(rs.next(), "no policy for " + agentType);
+			return rs.getString(1);
+		}
+	}
+
 	private void startFromEmptyDatabase() throws SQLException {
 		dropAllDatabaseObjects();
 		if ("postgres".equalsIgnoreCase(System.getProperty("database"))) {

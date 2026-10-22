@@ -34,6 +34,7 @@ import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.Provider;
@@ -526,6 +527,32 @@ public class HibernateObsDAO implements ObsDAO {
 		return !sessionFactory.getCurrentSession()
 		        .createQuery("select o.obsId from Obs o where o.previousVersion = :obs", Integer.class)
 		        .setParameter("obs", obs).setMaxResults(1).list().isEmpty();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#getObsFinalizationPolicyByUuid(String)
+	 */
+	@Override
+	public ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid) {
+		return HibernateUtil.getUniqueEntityByUUID(sessionFactory, ObsFinalizationPolicy.class, uuid);
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#getAllObsFinalizationPolicies(boolean)
+	 */
+	@Override
+	public List<ObsFinalizationPolicy> getAllObsFinalizationPolicies(boolean includeRetired) {
+		String hql = "from ObsFinalizationPolicy" + (includeRetired ? "" : " where retired = false")
+		        + " order by obsFinalizationPolicyId";
+		return sessionFactory.getCurrentSession().createQuery(hql, ObsFinalizationPolicy.class).setCacheable(true).list();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#saveObsFinalizationPolicy(ObsFinalizationPolicy)
+	 */
+	@Override
+	public ObsFinalizationPolicy saveObsFinalizationPolicy(ObsFinalizationPolicy policy) {
+		return HibernateUtil.saveOrUpdate(sessionFactory.getCurrentSession(), policy);
 	}
 
 	/**

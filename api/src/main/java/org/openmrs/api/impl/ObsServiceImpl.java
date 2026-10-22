@@ -18,10 +18,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.Concept;
+import org.openmrs.ConceptClass;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.Location;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.Provider;
@@ -36,6 +38,7 @@ import org.openmrs.api.PatientService;
 import org.openmrs.api.ProviderService;
 import org.openmrs.api.RefByUuid;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
 import org.openmrs.api.db.ObsDAO;
 import org.openmrs.api.handler.SaveHandler;
 import org.openmrs.obs.ComplexData;
@@ -118,11 +121,9 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 
 		ensureRequirePrivilege(obs);
 
-		// an obs that is not voided was not entered in error; this also covers unvoiding an obs by
-		// clearing its voided flag rather than through unvoidObs
-		if (!obs.getVoided() && Obs.Status.ENTERED_IN_ERROR.equals(obs.getStatus())) {
-			obs.setStatus(Obs.Status.FINAL);
-		}
+		// an obs that is not voided was not entered in error, whether it was unvoided through unvoidObs
+		// or by clearing its voided flag
+		reenterUnvoided(obs);
 
 		//Should allow updating a voided Obs, it seems to be pointless to restrict it,
 		//otherwise operations like merge patients won't be possible when to moving voided obs
@@ -180,6 +181,11 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		handleObsWithComplexConcept(newObs);
 		Obs.Status originalStatus = dao.getSavedStatus(obs);
 		updateStatusIfNecessary(newObs, originalStatus);
+		// an edit by an agent whose obs need attestation needs it too, and editing an obs that still
+		// waits for attestation does not finalize it: only attestation does
+		if (requiresAttestation(newObs, Obs.Status.PRELIMINARY.equals(originalStatus))) {
+			newObs.setStatus(Obs.Status.PRELIMINARY);
+		}
 
 		RequiredDataAdvice.recursivelyHandle(SaveHandler.class, newObs, changeMessage);
 
@@ -244,6 +250,21 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 				obs.setAsserter(dao.withoutAutoFlush(() -> asserterFor(creator)));
 			}
 		}
+		if (obs.getObsId() == null) {
+			if (requiresAttestation(obs, true)) {
+				obs.setStatus(Obs.Status.PRELIMINARY);
+			}
+		} else {
+			// a voided obs is out of the obs interceptor's sight, so its status cannot change while it is
+			// voided and carry over when it is unvoided. Entered in error is the exception: voidObs marks it,
+			// and unvoiding gives the obs its status afresh
+			if (!Obs.Status.ENTERED_IN_ERROR.equals(obs.getStatus())) {
+				Obs.Status savedStatus = dao.getSavedStatus(obs);
+				if (savedStatus != obs.getStatus()) {
+					obs.setStatus(savedStatus);
+				}
+			}
+		}
 		handleObsWithComplexConcept(obs);
 		Obs ret = dao.saveObs(obs);
 		saveObsGroup(ret, changeMessage);
@@ -256,19 +277,12 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 * and this returns null rather than guess.
 	 */
 	private Provider asserterFor(User user) {
+		user = loadUser(user);
 		if (user == null) {
 			return null;
 		}
 		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
 			Context.addProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
-			if (user.getUserId() != null) {
-				// callers such as the HL7 handler pass a user that carries only its id
-				user = Context.getUserService().getUser(user.getUserId());
-				if (user == null) {
-					return null;
-				}
-			}
 			ProviderService providerService = Context.getProviderService();
 			if (user.getUserType() != UserType.HUMAN) {
 				return providerService.getProviderByUser(user);
@@ -280,7 +294,81 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 			return providers.size() == 1 ? providers.iterator().next() : null;
 		} finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+		}
+	}
+
+	private User loadUser(User user) {
+		if (user == null || user.getUserId() == null) {
+			return user;
+		}
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
+			// callers such as the HL7 handler pass a user that carries only its id
+			return Context.getUserService().getUser(user.getUserId());
+		} finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_USERS);
+		}
+	}
+
+	/**
+	 * Whether an obs must wait, preliminary, for a person to attest it: when the finalization policy
+	 * for the authenticated user's kind of agent requires it, or, where the claim's asserter counts,
+	 * the policy for the asserter's kind. The user making the call always counts, since a caller can
+	 * name any asserter or creator. The Daemon saves obs for the system, from HL7 and scheduled tasks,
+	 * and is no agent of its own.
+	 */
+	private boolean requiresAttestation(Obs obs, boolean asserterCounts) {
+		return dao.withoutAutoFlush(() -> {
+			ConceptClass conceptClass = obs.getConcept() != null ? obs.getConcept().getConceptClass() : null;
+			User user = Context.getAuthenticatedUser();
+			if (user != null && !Daemon.isDaemonUser(user) && requiresAttestation(user.getUserType(), conceptClass)) {
+				return true;
+			}
+			return asserterCounts && requiresAttestation(agentTypeOf(obs.getAsserter()), conceptClass);
+		});
+	}
+
+	private boolean requiresAttestation(UserType agentType, ConceptClass conceptClass) {
+		ObsFinalizationPolicy policy = agentType != null ? getObsFinalizationPolicy(agentType, conceptClass) : null;
+		return policy != null && policy.getAction() == ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION;
+	}
+
+	/**
+	 * The kind of agent a provider is: its user's type, or a person's for a provider without a user.
+	 */
+	private UserType agentTypeOf(Provider asserter) {
+		if (asserter == null) {
+			return null;
+		}
+		if (asserter.getProviderId() != null) {
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+				// a caller may set an asserter that carries only its id
+				asserter = Context.getProviderService().getProvider(asserter.getProviderId());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_PROVIDERS);
+			}
+		}
+		User user = asserter != null ? asserter.getUser() : null;
+		return user != null ? user.getUserType() : UserType.HUMAN;
+	}
+
+	/**
+	 * Takes an obs, and the members of its group, out of {@link Obs.Status#ENTERED_IN_ERROR} once it is
+	 * no longer voided. The status it had before is not kept: it gets the one a new obs would, final,
+	 * or preliminary if its finalization policy requires attestation.
+	 */
+	private void reenterUnvoided(Obs obs) {
+		if (obs.getVoided()) {
+			return;
+		}
+		if (Obs.Status.ENTERED_IN_ERROR.equals(obs.getStatus())) {
+			obs.setStatus(requiresAttestation(obs, true) ? Obs.Status.PRELIMINARY : Obs.Status.FINAL);
+		}
+		if (obs.hasGroupMembers()) {
+			for (Obs member : obs.getGroupMembers()) {
+				reenterUnvoided(member);
+			}
 		}
 	}
 
@@ -808,12 +896,15 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 		if (Obs.class.equals(type)) {
 			return (T) getObsByUuid(uuid);
 		}
+		if (ObsFinalizationPolicy.class.equals(type)) {
+			return (T) getObsFinalizationPolicyByUuid(uuid);
+		}
 		throw new APIException("Unsupported type for getRefByUuid: " + type != null ? type.getName() : "null");
 	}
 
 	@Override
 	public List<Class<?>> getRefTypes() {
-		return Arrays.asList(Obs.class);
+		return Arrays.asList(Obs.class, ObsFinalizationPolicy.class);
 	}
 
 	/**
@@ -833,5 +924,67 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	@Transactional(readOnly = true)
 	public List<Obs> getObservationsBySoftwareVersion(String name, String version, Integer startIndex, Integer limit) {
 		return dao.getObservationsBySoftwareVersion(name, version, startIndex, limit);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicyByUuid(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid) {
+		return dao.getObsFinalizationPolicyByUuid(uuid);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#getAllObsFinalizationPolicies(boolean)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<ObsFinalizationPolicy> getAllObsFinalizationPolicies(boolean includeRetired) {
+		return dao.getAllObsFinalizationPolicies(includeRetired);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicy(UserType, ConceptClass)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public ObsFinalizationPolicy getObsFinalizationPolicy(UserType agentType, ConceptClass conceptClass) {
+		// the handful of policies come from the query cache, so saving an obs costs no query for them
+		ObsFinalizationPolicy forEveryClass = null;
+		for (ObsFinalizationPolicy policy : dao.getAllObsFinalizationPolicies(false)) {
+			if (policy.getAgentType() == agentType) {
+				if (policy.getConceptClass() == null) {
+					forEveryClass = policy;
+				} else if (policy.getConceptClass().equals(conceptClass)) {
+					return policy;
+				}
+			}
+		}
+		return forEveryClass;
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#saveObsFinalizationPolicy(ObsFinalizationPolicy)
+	 */
+	@Override
+	public ObsFinalizationPolicy saveObsFinalizationPolicy(ObsFinalizationPolicy policy) {
+		return dao.saveObsFinalizationPolicy(policy);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#retireObsFinalizationPolicy(ObsFinalizationPolicy, String)
+	 */
+	@Override
+	public ObsFinalizationPolicy retireObsFinalizationPolicy(ObsFinalizationPolicy policy, String reason) {
+		return dao.saveObsFinalizationPolicy(policy);
+	}
+
+	/**
+	 * @see org.openmrs.api.ObsService#unretireObsFinalizationPolicy(ObsFinalizationPolicy)
+	 */
+	@Override
+	public ObsFinalizationPolicy unretireObsFinalizationPolicy(ObsFinalizationPolicy policy) {
+		return dao.saveObsFinalizationPolicy(policy);
 	}
 }

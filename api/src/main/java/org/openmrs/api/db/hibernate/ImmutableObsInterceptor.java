@@ -44,11 +44,14 @@ public class ImmutableObsInterceptor extends ImmutableEntityInterceptor {
 	}
 
 	/**
-	 * Lets the status go from {@link Obs.Status#ENTERED_IN_ERROR} back to {@link Obs.Status#FINAL} as
-	 * the obs is unvoided, and to nothing else. Marking it entered in error needs nothing here, since
-	 * changes to an obs that is voided are ignored.
+	 * Lets the status go from {@link Obs.Status#ENTERED_IN_ERROR} back to {@link Obs.Status#FINAL}, or
+	 * to {@link Obs.Status#PRELIMINARY} when its finalization policy requires attestation, as the obs
+	 * is unvoided, and to nothing else. Marking it entered in error needs nothing here, since changes
+	 * to an obs that is voided are ignored.
 	 * <p>
 	 * <strong>Should</strong> allow an entered in error obs to go back to final as it is unvoided<br/>
+	 * <strong>Should</strong> allow an entered in error obs to go back to preliminary as it is
+	 * unvoided<br/>
 	 * <strong>Should</strong> not allow an entered in error obs to take another status<br/>
 	 * <strong>Should</strong> not allow the status of an obs that was not voided to change
 	 *
@@ -62,7 +65,8 @@ public class ImmutableObsInterceptor extends ImmutableEntityInterceptor {
 		}
 		int status = ArrayUtils.indexOf(propertyNames, "status");
 		int voided = ArrayUtils.indexOf(propertyNames, "voided");
-		return Obs.Status.ENTERED_IN_ERROR.equals(previousState[status]) && Obs.Status.FINAL.equals(currentState[status])
+		return Obs.Status.ENTERED_IN_ERROR.equals(previousState[status])
+		        && (Obs.Status.FINAL.equals(currentState[status]) || Obs.Status.PRELIMINARY.equals(currentState[status]))
 		        && Boolean.TRUE.equals(previousState[voided]) && Boolean.FALSE.equals(currentState[voided]);
 	}
 

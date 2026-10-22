@@ -37,9 +37,17 @@ public class ImmutableObsInterceptorTest {
 	 * @see ImmutableObsInterceptor#isAllowedChange(String, Object[], Object[], String[])
 	 */
 	@Test
+	public void onFlushDirty_shouldAllowAnEnteredInErrorObsToGoBackToPreliminaryAsItIsUnvoided() {
+		assertFalse(flush(Obs.Status.ENTERED_IN_ERROR, true, Obs.Status.PRELIMINARY, false));
+	}
+
+	/**
+	 * @see ImmutableObsInterceptor#isAllowedChange(String, Object[], Object[], String[])
+	 */
+	@Test
 	public void onFlushDirty_shouldNotAllowAnEnteredInErrorObsToTakeAnotherStatus() {
 		assertThrows(UnchangeableObjectException.class,
-		    () -> flush(Obs.Status.ENTERED_IN_ERROR, true, Obs.Status.PRELIMINARY, false));
+		    () -> flush(Obs.Status.ENTERED_IN_ERROR, true, Obs.Status.AMENDED, false));
 	}
 
 	/**
