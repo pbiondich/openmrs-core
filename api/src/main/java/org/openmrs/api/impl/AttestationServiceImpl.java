@@ -9,9 +9,9 @@
  */
 package org.openmrs.api.impl;
 
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -24,6 +24,7 @@ import org.openmrs.Person;
 import org.openmrs.Provider;
 import org.openmrs.ProviderType;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AttestationService;
 import org.openmrs.api.context.Context;
@@ -55,31 +56,40 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		if (items == null || items.isEmpty()) {
 			throw new APIException("ObsAttestation.error.noItems", (Object[]) null);
 		}
-		Set<Integer> seen = new HashSet<>();
+		// judge the obs as they are saved, not as the caller passed them
+		Set<Integer> itemObsIds = new HashSet<>();
+		Integer personId = null;
 		for (ObsAttestationItem item : items) {
-			checkItem(item, encounter, seen);
+			Obs obs = reload(item);
+			checkItem(item, encounter, itemObsIds);
+			if (personId != null && !personId.equals(obs.getPerson().getPersonId())) {
+				throw new APIException("ObsAttestation.error.otherPatient", new Object[] { obs.getUuid() });
+			}
+			personId = obs.getPerson().getPersonId();
 		}
 
-		List<Obs> accepted = new ArrayList<>();
+		Set<Integer> accepted = new LinkedHashSet<>();
 		for (ObsAttestationItem item : items) {
 			if (item.getOutcome() == ObsAttestationItem.Outcome.ACCEPTED) {
-				collectPreliminary(item.getObs(), accepted);
+				accepted.add(item.getObs().getObsId());
+				// an accepted group's preliminary members are accepted with it, unless they have an item of their own
+				collectPreliminaryMembers(item.getObs().getObsId(), itemObsIds, accepted);
 			} else if (item.getOutcome() == ObsAttestationItem.Outcome.AMENDED) {
 				amend(item, attester);
 			}
 		}
 		if (!accepted.isEmpty()) {
-			List<Integer> ids = new ArrayList<>();
-			accepted.forEach(obs -> ids.add(obs.getObsId()));
-			if (dao.finalizeObs(ids) != ids.size()) {
+			if (dao.finalizeObs(accepted) != accepted.size()) {
 				// someone else changed one of the obs since it was read
 				throw new APIException("ObsAttestation.error.changedMeanwhile", (Object[]) null);
 			}
-			accepted.forEach(Context::refreshEntity);
+			for (ObsAttestationItem item : items) {
+				Context.refreshEntity(item.getObs());
+			}
 		}
 
 		ObsAttestation attestation = new ObsAttestation();
-		attestation.setEncounter(encounter);
+		attestation.setEncounter(items.get(0).getObs().getEncounter());
 		attestation.setAttester(attester);
 		attestation.setAttestedAt(new Date());
 		items.forEach(attestation::addItem);
@@ -87,8 +97,8 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 	}
 
 	/**
-	 * A person attests, and only as themselves: the attester must be a person's provider, not retired,
-	 * and the authenticated user's own.
+	 * A person attests, and only as themselves: the authenticated user must be a person, and the
+	 * attester a person's provider, not retired, that is the user's own.
 	 */
 	private Provider checkAttester(Provider attester) {
 		if (attester == null) {
@@ -106,7 +116,7 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 			throw new APIException("ObsAttestation.error.attesterNotAPerson", (Object[]) null);
 		}
 		User user = Context.getAuthenticatedUser();
-		Person person = user != null ? user.getPerson() : null;
+		Person person = user != null && user.getUserType() == UserType.HUMAN ? user.getPerson() : null;
 		if (person == null || attester.getPerson() == null
 		        || !OpenmrsUtil.nullSafeEquals(person.getPersonId(), attester.getPerson().getPersonId())) {
 			throw new APIException("ObsAttestation.error.attesterNotYou", (Object[]) null);
@@ -114,9 +124,31 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		return attester;
 	}
 
+	/**
+	 * Replaces the item's obs with the obs as it is saved, dropping any changes the caller made to it.
+	 */
+	private Obs reload(ObsAttestationItem item) {
+		Obs obs = item.getObs();
+		if (obs == null || obs.getObsId() == null) {
+			throw new APIException("ObsAttestation.error.invalidItem", (Object[]) null);
+		}
+		Context.evictFromSession(obs);
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.GET_OBS);
+			obs = Context.getObsService().getObs(obs.getObsId());
+		} finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_OBS);
+		}
+		if (obs == null) {
+			throw new APIException("ObsAttestation.error.invalidItem", (Object[]) null);
+		}
+		item.setObs(obs);
+		return obs;
+	}
+
 	private void checkItem(ObsAttestationItem item, Encounter encounter, Set<Integer> seen) {
 		Obs obs = item.getObs();
-		if (item.getOutcome() == null || obs == null || obs.getObsId() == null || !seen.add(obs.getObsId())) {
+		if (item.getOutcome() == null || !seen.add(obs.getObsId())) {
 			throw new APIException("ObsAttestation.error.invalidItem", (Object[]) null);
 		}
 		if (obs.getVoided() || obs.getStatus() != Obs.Status.PRELIMINARY) {
@@ -135,20 +167,23 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		}
 	}
 
-	private void collectPreliminary(Obs obs, List<Obs> accepted) {
-		if (!obs.getVoided() && obs.getStatus() == Obs.Status.PRELIMINARY) {
-			accepted.add(obs);
-		}
-		if (obs.hasGroupMembers()) {
-			for (Obs member : obs.getGroupMembers()) {
-				collectPreliminary(member, accepted);
+	private void collectPreliminaryMembers(Integer groupId, Set<Integer> itemObsIds, Set<Integer> accepted) {
+		for (Object[] member : dao.getMembers(groupId)) {
+			Integer memberId = (Integer) member[0];
+			if (itemObsIds.contains(memberId)) {
+				continue;
 			}
+			if (member[1] == Obs.Status.PRELIMINARY) {
+				accepted.add(memberId);
+			}
+			collectPreliminaryMembers(memberId, itemObsIds, accepted);
 		}
 	}
 
 	/**
 	 * The correction becomes a new version of the obs, final and asserted by the attester, who now
-	 * makes the claim; the original is voided as replaced, which leaves its status as it was.
+	 * makes the claim, in the obs's place for its patient, encounter and group; the original is voided
+	 * as replaced, which leaves its status as it was. Attesting is the privilege this takes.
 	 */
 	private void amend(ObsAttestationItem item, Provider attester) {
 		Obs original = item.getObs();
@@ -156,6 +191,7 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		correction.setPreviousVersion(original);
 		correction.setPerson(original.getPerson());
 		correction.setEncounter(original.getEncounter());
+		correction.setObsGroup(original.getObsGroup());
 		if (correction.getConcept() == null) {
 			correction.setConcept(original.getConcept());
 		}
@@ -167,8 +203,17 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 		}
 		correction.setAsserter(attester);
 		correction.setStatus(Obs.Status.FINAL);
-		Context.getObsService().saveObs(correction, null);
-		Context.getObsService().voidObs(original, "Amended in attestation");
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.ADD_OBS);
+			Context.addProxyPrivilege(PrivilegeConstants.EDIT_OBS);
+			Context.addProxyPrivilege(PrivilegeConstants.DELETE_OBS);
+			Context.getObsService().saveObs(correction, null);
+			Context.getObsService().voidObs(original, "Amended in attestation");
+		} finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.DELETE_OBS);
+			Context.removeProxyPrivilege(PrivilegeConstants.EDIT_OBS);
+			Context.removeProxyPrivilege(PrivilegeConstants.ADD_OBS);
+		}
 	}
 
 	/**

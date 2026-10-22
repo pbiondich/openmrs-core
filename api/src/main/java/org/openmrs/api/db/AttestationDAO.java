@@ -33,6 +33,12 @@ public interface AttestationDAO {
 	List<Obs> getPendingObs(Person person);
 
 	/**
+	 * @param groupId an obs group
+	 * @return the id and saved status of each of its members that is not voided
+	 */
+	List<Object[]> getMembers(Integer groupId);
+
+	/**
 	 * Makes preliminary obs final on their own rows, in one statement that leaves out any obs that is
 	 * no longer preliminary or is voided.
 	 *

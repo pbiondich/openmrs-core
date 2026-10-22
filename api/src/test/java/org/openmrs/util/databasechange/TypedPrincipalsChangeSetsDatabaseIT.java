@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 13;
+	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 14;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {

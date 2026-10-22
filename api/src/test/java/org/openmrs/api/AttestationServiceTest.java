@@ -175,6 +175,66 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 		authenticate();
 	}
 
+	@Test
+	public void attest_shouldJudgeEachObsAsItIsSavedNotAsTheCallerPassedIt() {
+		Obs obs = newObs(50d);
+		Context.getObsService().saveObs(obs, null);
+		Obs forged = new Obs(obs.getObsId());
+		forged.setStatus(Obs.Status.PRELIMINARY);
+		forged.setEncounter(encounter);
+
+		assertThrows(APIException.class, () -> attest(new ObsAttestationItem(forged, Outcome.ACCEPTED)));
+		assertEquals(Obs.Status.FINAL, reload(obs).getStatus());
+	}
+
+	@Test
+	public void attest_shouldLeaveAMemberWithAnItemOfItsOwnToThatItem() {
+		Obs parent = newObs(null);
+		parent.setConcept(Context.getConceptService().getConcept(23));
+		Obs kept = newObs(50d);
+		Obs rejected = newObs(51d);
+		parent.addGroupMember(kept);
+		parent.addGroupMember(rejected);
+		parent.setAsserter(extractor);
+		Context.getObsService().saveObs(parent, null);
+		parent = reload(parent);
+
+		attest(new ObsAttestationItem(parent, Outcome.ACCEPTED), new ObsAttestationItem(reload(rejected), Outcome.REJECTED));
+
+		assertEquals(Obs.Status.FINAL, reload(kept).getStatus());
+		assertEquals(Obs.Status.PRELIMINARY, reload(rejected).getStatus());
+	}
+
+	@Test
+	public void getPendingForPatient_shouldIncludeAnObsWhoseLatestAttestationNoLongerRejectsIt() {
+		Obs obs = preliminaryObs(50d);
+		attest(new ObsAttestationItem(obs, Outcome.REJECTED));
+		assertFalse(pending().contains(reload(obs)));
+
+		attest(new ObsAttestationItem(reload(obs), Outcome.LEFT_PRELIMINARY));
+
+		assertTrue(pending().contains(reload(obs)));
+	}
+
+	@Test
+	public void getPendingForPatient_shouldLeaveOutTheMembersOfARejectedGroup() {
+		Obs parent = newObs(null);
+		parent.setConcept(Context.getConceptService().getConcept(23));
+		Obs member = newObs(50d);
+		parent.addGroupMember(member);
+		parent.setAsserter(extractor);
+		Context.getObsService().saveObs(parent, null);
+
+		attest(new ObsAttestationItem(reload(parent), Outcome.REJECTED));
+
+		assertFalse(pending().contains(reload(member)));
+	}
+
+	private List<Obs> pending() {
+		return attestationService
+		        .getPendingForPatient(Context.getPatientService().getPatient(encounter.getPatient().getPatientId()));
+	}
+
 	private ObsAttestation attest(ObsAttestationItem... items) {
 		return attestationService.attest(encounter, nurse, List.of(items));
 	}

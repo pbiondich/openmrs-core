@@ -71,5 +71,7 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   person's provider, not retired, and the authenticated user's own. An accepted obs, with the preliminary members of
   its group, becomes `FINAL` on the same row through one guarded update, so it is not an edit; an amended obs is
   replaced by the item's correction, saved `FINAL` with the attester as asserter, and voided as replaced; a rejected
-  obs stays `PRELIMINARY`, its item the only record of the rejection, as the plan leans. `getPendingForPatient` lists
-  the preliminary obs that no attestation rejected; `getObsAttestationItems` says what attestations made of an obs.
+  obs stays `PRELIMINARY`, its item the only record of the rejection, as the plan leans. Each obs is judged as it is
+  saved, all about one patient, and a group member with its own item follows that item. `getPendingForPatient` lists
+  the preliminary obs whose latest attestation, or whose group's, did not reject them; `getObsAttestationItems` says
+  what attestations made of an obs.

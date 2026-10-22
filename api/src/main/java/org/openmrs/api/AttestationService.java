@@ -42,6 +42,8 @@ public interface AttestationService extends OpenmrsService {
 	 * <strong>Should</strong> fail for an attester who is not the authenticated user<br/>
 	 * <strong>Should</strong> fail for an obs that is not preliminary<br/>
 	 * <strong>Should</strong> fail for an obs from another encounter<br/>
+	 * <strong>Should</strong> judge each obs as it is saved, not as the caller passed it<br/>
+	 * <strong>Should</strong> leave a member with an item of its own to that item<br/>
 	 * <strong>Should</strong> fail without the Attest Obs privilege
 	 *
 	 * @param encounter the encounter the obs belong to, or null for obs outside an encounter
@@ -75,10 +77,12 @@ public interface AttestationService extends OpenmrsService {
 
 	/**
 	 * The obs about a patient that wait for attestation: preliminary, not voided, and not rejected by
-	 * an attestation.
+	 * the latest attestation of the obs or of its group. A rejected obs can still be attested again.
 	 * <p>
 	 * <strong>Should</strong> return preliminary obs that no attestation rejected<br/>
-	 * <strong>Should</strong> include obs left preliminary
+	 * <strong>Should</strong> include obs left preliminary<br/>
+	 * <strong>Should</strong> include an obs whose latest attestation no longer rejects it<br/>
+	 * <strong>Should</strong> leave out the members of a rejected group
 	 *
 	 * @param patient a patient
 	 * @return the obs, oldest first

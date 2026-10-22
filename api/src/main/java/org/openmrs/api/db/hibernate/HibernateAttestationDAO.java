@@ -56,13 +56,27 @@ public class HibernateAttestationDAO implements AttestationDAO {
 
 	@Override
 	public List<Obs> getPendingObs(Person person) {
+		// rejected means the latest attestation of the obs, or of its group, rejected it
+		String latestRejected = "exists (from ObsAttestationItem i where i.obs = %s and i.outcome = :rejected"
+		        + " and not exists (from ObsAttestationItem later where later.obs = i.obs"
+		        + " and later.obsAttestationItemId > i.obsAttestationItemId))";
 		return sessionFactory.getCurrentSession()
-		        .createQuery("from Obs o where o.person = :person and o.voided = false and o.status = :preliminary"
-		                + " and not exists (from ObsAttestationItem i where i.obs = o and i.outcome = :rejected)"
-		                + " order by o.obsDatetime, o.obsId",
+		        .createQuery(
+		            "from Obs o where o.person = :person and o.voided = false and o.status = :preliminary" + " and not "
+		                    + String.format(latestRejected, "o") + " and (o.obsGroup is null or not "
+		                    + String.format(latestRejected, "o.obsGroup") + ")" + " order by o.obsDatetime, o.obsId",
 		            Obs.class)
 		        .setParameter("person", person).setParameter("preliminary", Obs.Status.PRELIMINARY)
 		        .setParameter("rejected", ObsAttestationItem.Outcome.REJECTED).list();
+	}
+
+	@Override
+	public List<Object[]> getMembers(Integer groupId) {
+		// read from the database, not from the group as the caller holds it
+		return sessionFactory.getCurrentSession()
+		        .createQuery("select o.obsId, o.status from Obs o where o.obsGroup.obsId = :groupId and o.voided = false",
+		            Object[].class)
+		        .setParameter("groupId", groupId).list();
 	}
 
 	@Override
