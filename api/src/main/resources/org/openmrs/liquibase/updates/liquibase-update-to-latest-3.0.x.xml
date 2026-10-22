@@ -207,4 +207,36 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p1-software-agent-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="software_agent"/>
+			</not>
+		</preConditions>
+		<comment>
+			One row per version of a piece of software that acts as a user. The version is part of the identity, so
+			each version is its own user, and all versions of the software share its name
+		</comment>
+		<createTable tableName="software_agent">
+			<column name="user_id" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="name" type="VARCHAR(255)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="version" type="VARCHAR(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="model_identifier" type="VARCHAR(255)"/>
+			<column name="config_hash" type="VARCHAR(64)"/>
+		</createTable>
+		<addUniqueConstraint tableName="software_agent" columnNames="name, version"
+			constraintName="software_agent_name_version"/>
+		<addForeignKeyConstraint baseTableName="software_agent" baseColumnNames="user_id"
+			constraintName="software_agent_user" referencedTableName="users" referencedColumnNames="user_id"/>
+		<rollback>
+			<dropTable tableName="software_agent"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

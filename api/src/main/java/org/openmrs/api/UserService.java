@@ -16,6 +16,7 @@ import java.util.Map;
 import org.openmrs.Person;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
+import org.openmrs.SoftwareAgent;
 import org.openmrs.User;
 import org.openmrs.annotation.Logging;
 import org.openmrs.notification.MessageException;
@@ -750,4 +751,45 @@ public interface UserService extends OpenmrsService {
 	 */
 	@PreAuthorize("isAuthenticated()")
 	String getLastLoginTime(User user);
+
+	/**
+	 * Creates a software user and the {@link SoftwareAgent} that describes it, together. The version is
+	 * part of the identity, so every version of a piece of software is created this way as a new user,
+	 * and a software agent is never changed afterwards.
+	 *
+	 * @param agent the software agent to create; its user must be new, and is created as a
+	 *            {@link org.openmrs.UserType#SOFTWARE} user
+	 * @param password the new user's password
+	 * @return the created software agent
+	 * @throws APIException if the user is already saved, the name or version is blank, that name and
+	 *             version already exist, or the config hash is not 64 lowercase hex characters
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasPermission(#agent.user, '" + PrivilegeConstants.ADD_USERS + "')")
+	@Logging(ignoredArgumentIndexes = { 1 })
+	SoftwareAgent createSoftwareAgent(SoftwareAgent agent, String password) throws APIException;
+
+	/**
+	 * @param user the user to look up
+	 * @return the software agent that describes the user, or null if there is none
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasPermission(#user, '" + PrivilegeConstants.GET_USERS + "')")
+	@PostAuthorize("hasPermission(returnObject?.user, '" + PrivilegeConstants.GET_USERS + "')")
+	SoftwareAgent getSoftwareAgent(User user);
+
+	/**
+	 * @param name the name of a piece of software
+	 * @return every version of the software, oldest first
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 * @since 3.0.0
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_USERS + "')")
+	@PostFilter("hasPermission(filterObject.user, '" + PrivilegeConstants.GET_USERS + "')")
+	List<SoftwareAgent> getSoftwareAgentVersions(String name);
 }

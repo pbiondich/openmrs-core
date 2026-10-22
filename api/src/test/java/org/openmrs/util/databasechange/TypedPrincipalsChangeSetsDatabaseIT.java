@@ -27,12 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests the assertion model changesets in liquibase-update-to-latest-3.0.x.xml that add
- * users.user_type, make users.person_id nullable and mark the Daemon user as SOFTWARE.
+ * Tests the assertion model phase 1 changesets in liquibase-update-to-latest-3.0.x.xml:
+ * users.user_type, a nullable users.person_id, the Daemon user as SOFTWARE, and the software_agent
+ * table with a row for the Daemon user.
  */
-public class UserTypeChangeSetsDatabaseIT extends DatabaseIT {
+public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int USER_TYPE_CHANGE_SET_COUNT = 3;
+	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 4;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -46,15 +47,17 @@ public class UserTypeChangeSetsDatabaseIT extends DatabaseIT {
 			assertEquals("SOFTWARE", getUserType(connection, "daemon"));
 			assertEquals("HUMAN", getUserType(connection, "admin"));
 			assertTrue(isPersonIdNullable(connection));
+			assertTrue(hasColumn(connection, "software_agent", "user_id"));
 		}
 
-		// the three user type changesets are the last ones in the latest update file
+		// the typed principals changesets are the last ones in the latest update file
 		Liquibase liquibase = getLiquibase(changeLogs.get(changeLogs.size() - 1));
-		liquibase.rollback(USER_TYPE_CHANGE_SET_COUNT, (String) null);
+		liquibase.rollback(TYPED_PRINCIPALS_CHANGE_SET_COUNT, (String) null);
 		liquibase.getDatabase().getConnection().commit();
 
 		try (Connection connection = getConnection()) {
 			assertFalse(hasColumn(connection, "users", "user_type"));
+			assertFalse(hasColumn(connection, "software_agent", "user_id"));
 			assertFalse(isPersonIdNullable(connection));
 		}
 	}
