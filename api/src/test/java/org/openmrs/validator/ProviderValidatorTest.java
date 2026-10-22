@@ -19,6 +19,9 @@ import org.openmrs.PersonName;
 import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
+import org.openmrs.ProviderType;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.ProviderService;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -290,5 +293,83 @@ public class ProviderValidatorTest extends BaseContextSensitiveTest {
 
 		assertTrue(errors.hasFieldErrors("identifier"));
 		assertTrue(errors.hasFieldErrors("retireReason"));
+	}
+
+	@Test
+	public void validate_shouldPassValidationForADigitalProviderBackedByASoftwareUser() {
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newUser(UserType.SOFTWARE));
+
+		providerValidator.validate(provider, errors);
+
+		assertFalse(errors.hasErrors());
+	}
+
+	@Test
+	public void validate_shouldPassValidationForADigitalProviderBackedByADeviceUser() {
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newUser(UserType.DEVICE));
+
+		providerValidator.validate(provider, errors);
+
+		assertFalse(errors.hasErrors());
+	}
+
+	@Test
+	public void validate_shouldFailValidationForADigitalProviderWithoutAUser() {
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setName("extractor");
+
+		providerValidator.validate(provider, errors);
+
+		assertTrue(errors.hasFieldErrors("user"));
+	}
+
+	@Test
+	public void validate_shouldFailValidationForADigitalProviderWithAHumanUser() {
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newUser(UserType.HUMAN));
+
+		providerValidator.validate(provider, errors);
+
+		assertTrue(errors.hasFieldErrors("user"));
+	}
+
+	@Test
+	public void validate_shouldFailValidationForADigitalProviderWithAPerson() {
+		provider.setProviderType(ProviderType.DIGITAL);
+		provider.setUser(newUser(UserType.SOFTWARE));
+		provider.setPerson(new Person(1));
+
+		providerValidator.validate(provider, errors);
+
+		assertTrue(errors.hasFieldErrors("user"));
+	}
+
+	@Test
+	public void validate_shouldFailValidationForABiologicProviderWithAUser() {
+		provider.setPerson(new Person(1));
+		provider.setUser(newUser(UserType.HUMAN));
+
+		providerValidator.validate(provider, errors);
+
+		assertTrue(errors.hasFieldErrors("user"));
+	}
+
+	@Test
+	public void validate_shouldFailValidationIfProviderTypeIsNull() {
+		provider.setPerson(new Person(1));
+		provider.setProviderType(null);
+
+		providerValidator.validate(provider, errors);
+
+		assertTrue(errors.hasFieldErrors("providerType"));
+	}
+
+	private User newUser(UserType userType) {
+		User user = new User();
+		user.setUsername("extractor-0.1");
+		user.setUserType(userType);
+		return user;
 	}
 }

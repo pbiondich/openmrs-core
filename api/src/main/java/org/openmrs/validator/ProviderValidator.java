@@ -12,6 +12,8 @@ package org.openmrs.validator;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Encounter;
 import org.openmrs.Provider;
+import org.openmrs.ProviderType;
+import org.openmrs.UserType;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
@@ -60,6 +62,12 @@ public class ProviderValidator extends BaseCustomizableValidator implements Vali
 	 * <strong>Should</strong> accept a duplicate identifier for a new provider which is not
 	 * retired<br/>
 	 * <strong>Should</strong> accept a duplicate identifier for a new provider which is retired<br/>
+	 * <strong>Should</strong> pass validation for a digital provider backed by a software user<br/>
+	 * <strong>Should</strong> pass validation for a digital provider backed by a device user<br/>
+	 * <strong>Should</strong> fail validation for a digital provider without a user<br/>
+	 * <strong>Should</strong> fail validation for a digital provider with a human user<br/>
+	 * <strong>Should</strong> fail validation for a digital provider with a person<br/>
+	 * <strong>Should</strong> fail validation for a biologic provider with a user<br/>
 	 * <strong>Should</strong> pass validation if field lengths are correct<br/>
 	 * <strong>Should</strong> fail validation if field lengths are not correct
 	 *
@@ -77,6 +85,17 @@ public class ProviderValidator extends BaseCustomizableValidator implements Vali
 		}
 
 		Provider provider = (Provider) obj;
+
+		if (provider.getProviderType() == null) {
+			errors.rejectValue("providerType", "error.null");
+		} else if (provider.getProviderType() == ProviderType.DIGITAL) {
+			UserType userType = provider.getUser() == null ? null : provider.getUser().getUserType();
+			if ((userType != UserType.SOFTWARE && userType != UserType.DEVICE) || provider.getPerson() != null) {
+				errors.rejectValue("user", "Provider.error.digital.userRequired");
+			}
+		} else if (provider.getUser() != null) {
+			errors.rejectValue("user", "Provider.error.biologic.noUser");
+		}
 
 		if (provider.getPerson() == null && StringUtils.isBlank(provider.getName())) {
 			errors.rejectValue("name", "Provider.error.personOrName.required");

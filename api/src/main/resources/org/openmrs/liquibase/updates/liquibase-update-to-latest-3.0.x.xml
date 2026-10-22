@@ -267,4 +267,44 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p1-provider-user-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="provider" columnName="user_id"/>
+			</not>
+		</preConditions>
+		<comment>
+			A digital provider is backed by a software or device user instead of a person. A user backs at most one
+			provider
+		</comment>
+		<addColumn tableName="provider">
+			<column name="user_id" type="INT"/>
+		</addColumn>
+		<addUniqueConstraint tableName="provider" columnNames="user_id" constraintName="provider_user"/>
+		<addForeignKeyConstraint baseTableName="provider" baseColumnNames="user_id" constraintName="provider_user_fk"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<rollback>
+			<dropForeignKeyConstraint baseTableName="provider" constraintName="provider_user_fk"/>
+			<dropUniqueConstraint tableName="provider" constraintName="provider_user"/>
+			<dropColumn tableName="provider" columnName="user_id"/>
+		</rollback>
+	</changeSet>
+
+	<changeSet id="assertion-model-p1-provider-type-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="provider" columnName="provider_type"/>
+			</not>
+		</preConditions>
+		<comment>Add provider.provider_type (BIOLOGIC | DIGITAL); existing providers are people, so BIOLOGIC</comment>
+		<addColumn tableName="provider">
+			<column name="provider_type" type="VARCHAR(50)" defaultValue="BIOLOGIC">
+				<constraints nullable="false"/>
+			</column>
+		</addColumn>
+		<rollback>
+			<dropColumn tableName="provider" columnName="provider_type"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

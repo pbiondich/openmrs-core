@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 5;
+	private static final int TYPED_PRINCIPALS_CHANGE_SET_COUNT = 7;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -49,6 +49,8 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertTrue(isPersonIdNullable(connection));
 			assertTrue(hasColumn(connection, "software_agent", "user_id"));
 			assertTrue(hasColumn(connection, "device_agent", "user_id"));
+			assertTrue(hasColumn(connection, "provider", "user_id"));
+			assertTrue(hasColumn(connection, "provider", "provider_type"));
 		}
 
 		// the typed principals changesets are the last ones in the latest update file
@@ -59,6 +61,8 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 		try (Connection connection = getConnection()) {
 			assertFalse(hasColumn(connection, "users", "user_type"));
 			assertFalse(hasColumn(connection, "device_agent", "user_id"));
+			assertFalse(hasColumn(connection, "provider", "user_id"));
+			assertFalse(hasColumn(connection, "provider", "provider_type"));
 			assertFalse(hasColumn(connection, "software_agent", "user_id"));
 			assertFalse(isPersonIdNullable(connection));
 		}

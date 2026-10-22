@@ -25,6 +25,7 @@ import jakarta.persistence.criteria.Root;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.hibernate.FlushMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.openmrs.Person;
@@ -33,6 +34,7 @@ import org.openmrs.Provider;
 import org.openmrs.ProviderAttribute;
 import org.openmrs.ProviderAttributeType;
 import org.openmrs.ProviderRole;
+import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.ProviderDAO;
 import org.openmrs.util.OpenmrsConstants;
@@ -217,8 +219,12 @@ public class HibernateProviderDAO implements ProviderDAO {
 			predicates.add(cb.isFalse(root.get("retired")));
 		}
 
+		// a digital provider has no person, so it is found by its user's username or system id
+		Join<Provider, User> userJoin = root.join("user", JoinType.LEFT);
 		Predicate orCondition = cb.or(cb.like(cb.lower(root.get("identifier")), getMatchMode().toLowerCasePattern(name)),
-		    cb.like(cb.lower(root.get("name")), MatchMode.ANYWHERE.toLowerCasePattern(name)));
+		    cb.like(cb.lower(root.get("name")), MatchMode.ANYWHERE.toLowerCasePattern(name)),
+		    cb.like(cb.lower(userJoin.get("username")), MatchMode.ANYWHERE.toLowerCasePattern(name)),
+		    cb.like(cb.lower(userJoin.get("systemId")), MatchMode.ANYWHERE.toLowerCasePattern(name)));
 
 		Join<Provider, Person> personJoin = root.join("person", JoinType.LEFT);
 		Join<Person, PersonName> personNameJoin = personJoin.join("names", JoinType.LEFT);
@@ -453,5 +459,28 @@ public class HibernateProviderDAO implements ProviderDAO {
 	@Override
 	public void deleteProviderRole(ProviderRole providerRole) {
 		getSession().remove(providerRole);
+	}
+
+	/**
+	 * @see ProviderDAO#getProviderByUser(User)
+	 */
+	@Override
+	public Provider getProviderByUser(User user) {
+		if (user == null || user.getUserId() == null) {
+			return null;
+		}
+		return getSession().createQuery("from Provider where user = :user", Provider.class).setParameter("user", user)
+		        .uniqueResult();
+	}
+
+	/**
+	 * @see ProviderDAO#getStoredProviderTypeAndUserId(Integer)
+	 */
+	@Override
+	public Object[] getStoredProviderTypeAndUserId(Integer providerId) {
+		// do not flush first: the provider being checked may hold changes that must not reach the database
+		return getSession()
+		        .createQuery("select p.providerType, p.user.userId from Provider p where p.providerId = :id", Object[].class)
+		        .setParameter("id", providerId).setHibernateFlushMode(FlushMode.MANUAL).uniqueResult();
 	}
 }
