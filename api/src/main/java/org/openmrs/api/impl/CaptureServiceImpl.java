@@ -9,35 +9,38 @@
  */
 package org.openmrs.api.impl;
 
-import java.io.File;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.text.SimpleDateFormat;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
-import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Capture;
+import org.openmrs.Capture.Kind;
 import org.openmrs.Encounter;
 import org.openmrs.api.APIException;
 import org.openmrs.api.CaptureService;
+import org.openmrs.api.StorageService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.CaptureDAO;
+import org.openmrs.api.storage.ObjectMetadata;
 import org.openmrs.util.OpenmrsConstants;
-import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Default implementation of {@link CaptureService}.
@@ -50,16 +53,22 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 
 	private static final Logger log = LoggerFactory.getLogger(CaptureServiceImpl.class);
 
-	private static final EnumSet<Capture.Kind> EXPIRING_KINDS = EnumSet.of(Capture.Kind.AUDIO, Capture.Kind.VIDEO);
+	/**
+	 * The storage group capture artifacts are kept under.
+	 */
+	static final String STORAGE_GROUP = "captures";
 
 	private static final int DEFAULT_RETENTION_DAYS = 90;
 
-	private static final Map<String, String> EXTENSIONS = Map.of("application/pdf", ".pdf", "image/jpeg", ".jpg",
-	    "image/png", ".png", "image/tiff", ".tif", "audio/mpeg", ".mp3", "audio/wav", ".wav", "audio/ogg", ".ogg",
-	    "video/mp4", ".mp4", "text/plain", ".txt");
+	private static final long DEFAULT_MAX_SIZE_MB = 100;
+
+	private static final Pattern MEDIA_TYPE = Pattern.compile("[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*");
 
 	@Autowired
 	private CaptureDAO dao;
+
+	@Autowired
+	private StorageService storageService;
 
 	/**
 	 * @see CaptureService#createCapture(Capture, InputStream)
@@ -67,29 +76,42 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	@Override
 	public Capture createCapture(Capture capture, InputStream artifact) {
 		if (capture.getCaptureId() != null || capture.getEncounter() == null || capture.getKind() == null
-		        || StringUtils.isBlank(capture.getMimeType()) || artifact == null) {
+		        || artifact == null) {
 			throw new APIException("Capture.error.invalid", (Object[]) null);
 		}
+		if (capture.getConsentStatus() == null) {
+			capture.setConsentStatus(Capture.ConsentStatus.NOT_RECORDED);
+		} else if (capture.getConsentStatus() == Capture.ConsentStatus.WITHDRAWN) {
+			throw new APIException("Capture.error.consentWithdrawn", (Object[]) null);
+		}
+		String mimeType = mediaType(capture.getMimeType());
+		if (mimeType == null || !allows(capture.getKind(), mimeType)) {
+			throw new APIException("Capture.error.mimeType", new Object[] { capture.getMimeType(), capture.getKind() });
+		}
+		capture.setMimeType(mimeType);
+		// audio and video expire, every other kind is kept
 		Date now = new Date();
-		if (EXPIRING_KINDS.contains(capture.getKind())) {
-			capture.setRetentionClass(Capture.RetentionClass.EXPIRE);
-			capture.setExpiresAt(new Date(now.getTime() + TimeUnit.DAYS.toMillis(retentionDays())));
-		} else {
-			capture.setRetentionClass(Capture.RetentionClass.KEEP);
-			capture.setExpiresAt(null);
-		}
+		capture.setExpiresAt(capture.getKind() == Kind.AUDIO || capture.getKind() == Kind.VIDEO
+		        ? new Date(now.getTime() + TimeUnit.DAYS.toMillis(retentionDays()))
+		        : null);
 		capture.setArtifactDeletedAt(null);
-		// the file is named from the capture's uuid, so nothing the caller sends becomes part of a path
-		String extension = EXTENSIONS.getOrDefault(capture.getMimeType().toLowerCase(Locale.ROOT), ".bin");
-		String uri = new SimpleDateFormat("yyyy/MM").format(now) + "/" + capture.getUuid() + extension;
-		Path file = resolve(uri);
+
+		MessageDigest sha256 = sha256();
+		long maxBytes = maxSizeMb() * 1024 * 1024;
+		String key;
+		// not closed here: the caller closes the artifact
+		InputStream in = new DigestInputStream(new LimitedInputStream(artifact, maxBytes), sha256);
 		try {
-			Files.createDirectories(file.getParent());
-			Files.copy(artifact, file, StandardCopyOption.REPLACE_EXISTING);
+			// storage picks the key, so nothing the caller sends becomes part of a path
+			key = storageService.saveData(in, ObjectMetadata.builder().setMimeType(mimeType).build(), STORAGE_GROUP);
+		} catch (TooLargeException e) {
+			throw new APIException("Capture.error.tooLarge", new Object[] { maxSizeMb() }, e);
 		} catch (IOException e) {
-			throw new APIException("Capture.error.store", new Object[] { uri }, e);
+			throw new APIException("Capture.error.store", (Object[]) null, e);
 		}
-		capture.setArtifactUri(uri);
+		purgeIfRolledBack(key);
+		capture.setArtifactKey(key);
+		capture.setSha256(HexFormat.of().formatHex(sha256.digest()));
 		return dao.saveCapture(capture);
 	}
 
@@ -117,11 +139,16 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	@Override
 	@Transactional(readOnly = true)
 	public InputStream getArtifact(Capture capture) {
-		if (capture.getArtifactDeletedAt() != null) {
-			throw new APIException("Capture.error.artifactDeleted", new Object[] { capture.getUuid() });
+		if (capture.getCaptureId() == null) {
+			throw new APIException("Capture.error.notSaved", (Object[]) null);
+		}
+		// the key comes from the database, never from the object passed in
+		String key = capture.getVoided() ? null : dao.getReadableArtifactKey(capture.getCaptureId());
+		if (key == null) {
+			throw new APIException("Capture.error.noArtifact", new Object[] { capture.getUuid() });
 		}
 		try {
-			return Files.newInputStream(resolve(capture.getArtifactUri()));
+			return storageService.getData(key);
 		} catch (IOException e) {
 			throw new APIException("Capture.error.read", new Object[] { capture.getUuid() }, e);
 		}
@@ -132,11 +159,11 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	 */
 	@Override
 	public Capture withdrawConsent(Capture capture) {
-		capture.setConsentStatus(Capture.ConsentStatus.WITHDRAWN);
-		if (capture.getRetentionClass() == Capture.RetentionClass.EXPIRE) {
-			deleteArtifact(capture);
-		}
-		return dao.saveCapture(capture);
+		Integer captureId = reload(capture).getCaptureId();
+		dao.withdrawConsent(captureId);
+		// an artifact that would expire is now due for deletion; one that is kept is not
+		deleteArtifact(captureId, new Date());
+		return reload(capture);
 	}
 
 	/**
@@ -144,12 +171,18 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	 */
 	@Override
 	public int deleteExpiredArtifacts() {
-		List<Capture> captures = dao.getCapturesWithArtifactsToDelete(new Date());
-		for (Capture capture : captures) {
-			deleteArtifact(capture);
-			dao.saveCapture(capture);
+		Date now = new Date();
+		int deleted = 0;
+		for (Integer captureId : dao.getCaptureIdsWithArtifactsToDelete(now)) {
+			try {
+				if (deleteArtifact(captureId, now)) {
+					deleted++;
+				}
+			} catch (APIException e) {
+				log.error("Could not delete the artifact of capture {}; trying again on the next run", captureId, e);
+			}
 		}
-		return captures.size();
+		return deleted;
 	}
 
 	/**
@@ -160,53 +193,180 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		return dao.saveCapture(capture);
 	}
 
-	private void deleteArtifact(Capture capture) {
-		if (capture.getArtifactDeletedAt() != null) {
-			return;
+	/**
+	 * Deletes a capture's artifact if, going by the database, it is due for deletion.
+	 *
+	 * @return true if it was due and so deleted
+	 */
+	private boolean deleteArtifact(Integer captureId, Date now) {
+		String key = dao.getArtifactKeyToDelete(captureId, now);
+		if (key == null) {
+			return false;
 		}
 		try {
-			Files.deleteIfExists(resolve(capture.getArtifactUri()));
+			// an artifact already gone, say after a rolled back run, still counts as deleted
+			storageService.purgeData(key);
 		} catch (IOException e) {
-			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() }, e);
+			throw new APIException("Capture.error.delete", new Object[] { captureId }, e);
 		}
-		capture.setArtifactDeletedAt(new Date());
+		dao.markArtifactDeleted(captureId, now);
+		return true;
+	}
+
+	private Capture reload(Capture capture) {
+		Capture saved = capture.getCaptureId() == null ? null : dao.reload(capture);
+		if (saved == null) {
+			throw new APIException("Capture.error.notSaved", (Object[]) null);
+		}
+		return saved;
 	}
 
 	/**
-	 * The file an artifact uri names, refusing any that would fall outside capture storage.
+	 * Deletes a just stored artifact if the transaction saving its capture rolls back, so storage never
+	 * keeps an artifact no capture points to.
 	 */
-	private Path resolve(String uri) {
-		Path storage = storageDirectory().toPath().toAbsolutePath().normalize();
-		Path file = storage.resolve(uri).normalize();
-		if (!file.startsWith(storage)) {
-			throw new APIException("Capture.error.outsideStorage", new Object[] { uri });
+	private void purgeIfRolledBack(String key) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			return;
 		}
-		return file;
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+			@Override
+			public void afterCompletion(int status) {
+				if (status != STATUS_COMMITTED) {
+					try {
+						storageService.purgeData(key);
+					} catch (IOException | RuntimeException e) {
+						log.error("Could not delete the artifact {} of a capture that was not saved", key, e);
+					}
+				}
+			}
+		});
 	}
 
-	private File storageDirectory() {
-		return OpenmrsUtil.getDirectoryInApplicationDataDirectory(
-		    globalProperty(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_DIR, "captures"));
+	/**
+	 * @return the media type without parameters, in lower case, or null if it is not one
+	 */
+	static String mediaType(String mimeType) {
+		if (StringUtils.isBlank(mimeType)) {
+			return null;
+		}
+		String type = StringUtils.substringBefore(mimeType, ";").trim().toLowerCase(Locale.ROOT);
+		return MEDIA_TYPE.matcher(type).matches() ? type : null;
+	}
+
+	/**
+	 * Which media types each kind may be. Nothing a browser would run, such as HTML or SVG, is allowed.
+	 */
+	static boolean allows(Kind kind, String mimeType) {
+		boolean image = mimeType.startsWith("image/") && !mimeType.equals("image/svg+xml");
+		boolean pdf = mimeType.equals("application/pdf");
+		switch (kind) {
+			case AUDIO:
+				return mimeType.startsWith("audio/");
+			case VIDEO:
+				return mimeType.startsWith("video/");
+			case IMAGE:
+				return image;
+			case SCANNED_FORM:
+			case HANDWRITTEN:
+				return image || pdf;
+			case TYPED_TEXT:
+				return mimeType.equals("text/plain") || pdf;
+			default:
+				return false;
+		}
+	}
+
+	private static MessageDigest sha256() {
+		try {
+			return MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	private int retentionDays() {
-		String days = globalProperty(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS,
-		    String.valueOf(DEFAULT_RETENTION_DAYS));
-		try {
-			return Integer.parseInt(days.trim());
-		} catch (NumberFormatException e) {
-			log.warn("{} is not a number of days: {}; using {}", OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS,
-			    days, DEFAULT_RETENTION_DAYS);
-			return DEFAULT_RETENTION_DAYS;
-		}
+		return (int) positiveNumber(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS, DEFAULT_RETENTION_DAYS);
 	}
 
-	private String globalProperty(String name, String defaultValue) {
+	private long maxSizeMb() {
+		return positiveNumber(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_MAX_SIZE_MB, DEFAULT_MAX_SIZE_MB);
+	}
+
+	private long positiveNumber(String property, long defaultValue) {
+		String value;
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-			return Context.getAdministrationService().getGlobalProperty(name, defaultValue);
+			value = Context.getAdministrationService().getGlobalProperty(property, String.valueOf(defaultValue));
 		} finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		}
+		try {
+			long number = Long.parseLong(value.trim());
+			if (number > 0 && number <= Integer.MAX_VALUE) {
+				return number;
+			}
+		} catch (NumberFormatException e) {
+			// falls through to the default
+		}
+		log.warn("{} is not a positive whole number: {}; using {}", property, value, defaultValue);
+		return defaultValue;
+	}
+
+	private static class TooLargeException extends IOException {
+
+		private static final long serialVersionUID = 1L;
+	}
+
+	/**
+	 * Fails a read once more than the limit has been read, so an artifact over the size limit is never
+	 * stored whole.
+	 */
+	private static class LimitedInputStream extends FilterInputStream {
+
+		private final long limit;
+
+		private long count;
+
+		LimitedInputStream(InputStream in, long limit) {
+			super(in);
+			this.limit = limit;
+		}
+
+		@Override
+		public int read() throws IOException {
+			int b = super.read();
+			if (b != -1) {
+				count(1);
+			}
+			return b;
+		}
+
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+			int n = super.read(b, off, len);
+			if (n > 0) {
+				count(n);
+			}
+			return n;
+		}
+
+		@Override
+		public long skip(long n) throws IOException {
+			throw new IOException("skip is not supported");
+		}
+
+		@Override
+		public boolean markSupported() {
+			return false;
+		}
+
+		private void count(long n) throws TooLargeException {
+			count += n;
+			if (count > limit) {
+				throw new TooLargeException();
+			}
 		}
 	}
 }

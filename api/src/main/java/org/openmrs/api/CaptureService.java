@@ -19,25 +19,31 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Captures: the scanned forms, recordings and other artifacts encounters are captured in. Artifacts
- * are files in capture storage, under the global property
- * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_CAPTURE_DIR}; audio and video expire
- * after {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS} days, and
- * every other kind is kept.
+ * are kept by the {@link StorageService}, never in the database. Audio and video expire after
+ * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS} days, and every
+ * other kind is kept; the capture row always stays.
  *
  * @since 3.0.0
  */
 public interface CaptureService extends OpenmrsService {
 
 	/**
-	 * Stores a new capture's artifact and saves the capture. The service names the file itself, so
-	 * nothing the caller sends becomes part of a path, and sets how long it is kept from its kind.
+	 * Stores a new capture's artifact and saves the capture. Storage picks the artifact's key, so
+	 * nothing the caller sends becomes part of a path, and the service sets the checksum and how long
+	 * the artifact is kept from its kind. If the transaction rolls back, the stored artifact is
+	 * deleted.
 	 * <p>
-	 * <strong>Should</strong> store the artifact in capture storage<br/>
+	 * <strong>Should</strong> store the artifact with its checksum<br/>
 	 * <strong>Should</strong> keep a scanned form and expire audio<br/>
-	 * <strong>Should</strong> fail for a capture that is already saved
+	 * <strong>Should</strong> ignore an expiry, key or checksum the caller set<br/>
+	 * <strong>Should</strong> fail for a capture that is already saved<br/>
+	 * <strong>Should</strong> fail for a media type the kind does not allow<br/>
+	 * <strong>Should</strong> fail for an artifact over the size limit<br/>
+	 * <strong>Should</strong> delete the artifact if the transaction rolls back
 	 *
-	 * @param capture a new capture, with its encounter, kind and media type
-	 * @param artifact the artifact's content
+	 * @param capture a new capture, with its encounter, kind and media type, and optionally whether the
+	 *            patient gave consent
+	 * @param artifact the artifact's content, which the caller closes
 	 * @return the saved capture
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
@@ -64,11 +70,15 @@ public interface CaptureService extends OpenmrsService {
 	List<Capture> getCapturesByEncounter(Encounter encounter);
 
 	/**
+	 * Reads the artifact of a saved capture, going by what is in the database rather than the object
+	 * passed in.
+	 * <p>
 	 * <strong>Should</strong> stream the stored artifact<br/>
 	 * <strong>Should</strong> fail once the artifact is deleted<br/>
-	 * <strong>Should</strong> fail for an artifact uri outside capture storage
+	 * <strong>Should</strong> fail for a voided capture<br/>
+	 * <strong>Should</strong> read the key from the database, not the object passed in
 	 *
-	 * @param capture a capture
+	 * @param capture a saved capture
 	 * @return its artifact's content, which the caller closes
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
@@ -83,8 +93,8 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> delete an expiring artifact at once<br/>
 	 * <strong>Should</strong> keep a scanned form
 	 *
-	 * @param capture a capture
-	 * @return the capture
+	 * @param capture a saved capture
+	 * @return the capture, as it now is in the database
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
 	 */
@@ -92,7 +102,9 @@ public interface CaptureService extends OpenmrsService {
 	Capture withdrawConsent(Capture capture);
 
 	/**
-	 * Deletes the artifacts that have expired, keeping their captures; never one that is kept.
+	 * Deletes the artifacts that have expired, or would expire and whose consent was withdrawn, keeping
+	 * their captures; never one that is kept. One artifact that cannot be deleted does not stop the
+	 * rest.
 	 * <p>
 	 * <strong>Should</strong> delete an expired audio artifact<br/>
 	 * <strong>Should</strong> never delete a scanned form<br/>

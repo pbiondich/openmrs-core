@@ -29,9 +29,40 @@ public interface CaptureDAO {
 	List<Capture> getCapturesByEncounter(Encounter encounter);
 
 	/**
-	 * @param now the time to judge expiry by
-	 * @return the captures whose artifact expires and is still stored, and that have expired or whose
-	 *         consent was withdrawn
+	 * @param capture a saved capture
+	 * @return the capture as it is in the database, after saving any pending changes the mapping lets
+	 *         through
 	 */
-	List<Capture> getCapturesWithArtifactsToDelete(Date now);
+	Capture reload(Capture capture);
+
+	/**
+	 * @param captureId a capture
+	 * @return its artifact's key, if the capture is not voided and its artifact is still stored;
+	 *         otherwise null
+	 */
+	String getReadableArtifactKey(Integer captureId);
+
+	/**
+	 * @param now the time to judge expiry by
+	 * @return the ids of the captures whose artifact expires and is still stored, and that have expired
+	 *         or whose consent was withdrawn
+	 */
+	List<Integer> getCaptureIdsWithArtifactsToDelete(Date now);
+
+	/**
+	 * @param captureId a capture
+	 * @return its artifact's key, if the artifact expires and is still stored, and it has expired or
+	 *         its consent was withdrawn; otherwise null
+	 */
+	String getArtifactKeyToDelete(Integer captureId, Date now);
+
+	/**
+	 * Records consent as withdrawn, in the database.
+	 */
+	void withdrawConsent(Integer captureId);
+
+	/**
+	 * Records the artifact as deleted, in the database, unless it already is.
+	 */
+	void markArtifactDeleted(Integer captureId, Date deletedAt);
 }

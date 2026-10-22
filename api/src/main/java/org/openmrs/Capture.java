@@ -29,8 +29,13 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * Something an encounter was captured in, such as a scanned form or an audio recording, from which
- * obs are derived. The artifact itself is a file in capture storage, never in the database; this
- * row stays after the file is deleted, so obs keep saying where they came from.
+ * obs are derived. The artifact itself is kept by the {@link org.openmrs.api.StorageService}, never
+ * in the database; this row stays after the artifact is deleted, so obs keep saying where they came
+ * from.
+ * <p>
+ * Only {@link org.openmrs.api.CaptureService} sets a capture's storage key, checksum, expiry and
+ * deletion, and once saved none of them, nor the consent, can be changed by saving the capture
+ * again: the service changes consent and deletion in the database itself.
  *
  * @since 3.0.0
  */
@@ -68,20 +73,6 @@ public class Capture extends BaseOpenmrsData {
 		WITHDRAWN
 	}
 
-	/**
-	 * How long the artifact is kept.
-	 */
-	public enum RetentionClass {
-		/**
-		 * Kept for good, as part of the record.
-		 */
-		KEEP,
-		/**
-		 * Deleted once it expires, or once consent is withdrawn.
-		 */
-		EXPIRE
-	}
-
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(name = "capture_id")
@@ -96,26 +87,24 @@ public class Capture extends BaseOpenmrsData {
 	@Column(name = "kind", length = 50, nullable = false, updatable = false)
 	private Kind kind;
 
-	@Column(name = "artifact_uri", length = 1024, nullable = false, updatable = false)
-	private String artifactUri;
+	@Column(name = "artifact_key", length = 1024, nullable = false, updatable = false)
+	private String artifactKey;
 
 	@Column(name = "mime_type", length = 255, nullable = false, updatable = false)
 	private String mimeType;
 
+	@Column(name = "sha256", length = 64, nullable = false, updatable = false)
+	private String sha256;
+
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(name = "consent_status", length = 50, nullable = false)
+	@Column(name = "consent_status", length = 50, nullable = false, updatable = false)
 	private ConsentStatus consentStatus = ConsentStatus.NOT_RECORDED;
 
-	@Enumerated(EnumType.STRING)
-	@JdbcTypeCode(SqlTypes.VARCHAR)
-	@Column(name = "retention_class", length = 50, nullable = false, updatable = false)
-	private RetentionClass retentionClass;
-
-	@Column(name = "expires_at")
+	@Column(name = "expires_at", updatable = false)
 	private Date expiresAt;
 
-	@Column(name = "artifact_deleted_at")
+	@Column(name = "artifact_deleted_at", updatable = false)
 	private Date artifactDeletedAt;
 
 	public Capture() {
@@ -167,14 +156,14 @@ public class Capture extends BaseOpenmrsData {
 	}
 
 	/**
-	 * @return where the artifact is in capture storage, relative to it; the service sets this
+	 * @return the artifact's key in the {@link org.openmrs.api.StorageService}; the service sets this
 	 */
-	public String getArtifactUri() {
-		return artifactUri;
+	public String getArtifactKey() {
+		return artifactKey;
 	}
 
-	public void setArtifactUri(String artifactUri) {
-		this.artifactUri = artifactUri;
+	public void setArtifactKey(String artifactKey) {
+		this.artifactKey = artifactKey;
 	}
 
 	public String getMimeType() {
@@ -183,6 +172,17 @@ public class Capture extends BaseOpenmrsData {
 
 	public void setMimeType(String mimeType) {
 		this.mimeType = mimeType;
+	}
+
+	/**
+	 * @return the artifact's SHA-256, in lower case hex; the service sets this
+	 */
+	public String getSha256() {
+		return sha256;
+	}
+
+	public void setSha256(String sha256) {
+		this.sha256 = sha256;
 	}
 
 	public ConsentStatus getConsentStatus() {
@@ -194,18 +194,8 @@ public class Capture extends BaseOpenmrsData {
 	}
 
 	/**
-	 * @return how long the artifact is kept; the service sets this from the kind
-	 */
-	public RetentionClass getRetentionClass() {
-		return retentionClass;
-	}
-
-	public void setRetentionClass(RetentionClass retentionClass) {
-		this.retentionClass = retentionClass;
-	}
-
-	/**
-	 * @return when an artifact that expires may be deleted, or null for one that is kept
+	 * @return when the artifact may be deleted, or null for one that is kept for good; the service sets
+	 *         this from the kind
 	 */
 	public Date getExpiresAt() {
 		return expiresAt;

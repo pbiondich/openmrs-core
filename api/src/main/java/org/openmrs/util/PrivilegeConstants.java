@@ -270,9 +270,6 @@ public class PrivilegeConstants {
 	/**
 	 * @since 3.0.0
 	 */
-	/**
-	 * @since 3.0.0
-	 */
 	@AddOnStartup(description = "Able to get captures, such as scanned forms and recordings, and their artifacts")
 	public static final String GET_CAPTURES = "Get Captures";
 
