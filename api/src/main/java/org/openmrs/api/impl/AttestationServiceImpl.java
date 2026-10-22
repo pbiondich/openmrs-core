@@ -10,9 +10,11 @@
 package org.openmrs.api.impl;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Encounter;
@@ -67,6 +69,7 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 			}
 			personId = obs.getPerson().getPersonId();
 		}
+		checkRejectedGroups(items);
 
 		Set<Integer> accepted = new LinkedHashSet<>();
 		for (ObsAttestationItem item : items) {
@@ -85,6 +88,11 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 			}
 			for (ObsAttestationItem item : items) {
 				Context.refreshEntity(item.getObs());
+			}
+		}
+		for (ObsAttestationItem item : items) {
+			if (item.getOutcome() == ObsAttestationItem.Outcome.REJECTED) {
+				reject(item.getObs());
 			}
 		}
 
@@ -168,6 +176,45 @@ public class AttestationServiceImpl extends BaseOpenmrsService implements Attest
 			// an amendment carries one new obs, without members of its own, replacing a single obs; nothing else
 			// carries one
 			throw new APIException("ObsAttestation.error.invalidAmendment", new Object[] { obs.getUuid() });
+		}
+	}
+
+	/**
+	 * Rejecting a group invalidates its members, so no other item may accept or amend one of them.
+	 */
+	private void checkRejectedGroups(List<ObsAttestationItem> items) {
+		Map<Integer, ObsAttestationItem.Outcome> outcomes = new HashMap<>();
+		items.forEach(item -> outcomes.put(item.getObs().getObsId(), item.getOutcome()));
+		for (ObsAttestationItem item : items) {
+			if (item.getOutcome() == ObsAttestationItem.Outcome.REJECTED) {
+				checkMembersRejected(item.getObs().getObsId(), outcomes);
+			}
+		}
+	}
+
+	private void checkMembersRejected(Integer groupId, Map<Integer, ObsAttestationItem.Outcome> outcomes) {
+		for (Object[] member : dao.getMembers(groupId)) {
+			ObsAttestationItem.Outcome outcome = outcomes.get(member[0]);
+			if (outcome != null && outcome != ObsAttestationItem.Outcome.REJECTED) {
+				throw new APIException("ObsAttestation.error.memberOfRejectedGroup", new Object[] { member[0] });
+			}
+			checkMembersRejected((Integer) member[0], outcomes);
+		}
+	}
+
+	/**
+	 * A rejected obs is a claim that should not have been made, so it is voided as entered in error,
+	 * with the members of its group; the attestation item records who rejected it and when. Attesting
+	 * is the privilege this takes.
+	 */
+	private void reject(Obs obs) {
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.EDIT_OBS);
+			Context.addProxyPrivilege(PrivilegeConstants.DELETE_OBS);
+			Context.getObsService().voidObs(obs, "Rejected in attestation");
+		} finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.DELETE_OBS);
+			Context.removeProxyPrivilege(PrivilegeConstants.EDIT_OBS);
 		}
 	}
 

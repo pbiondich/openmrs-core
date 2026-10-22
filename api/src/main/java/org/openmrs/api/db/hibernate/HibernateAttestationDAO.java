@@ -56,18 +56,12 @@ public class HibernateAttestationDAO implements AttestationDAO {
 
 	@Override
 	public List<Obs> getPendingObs(Person person) {
-		// rejected means the latest attestation of the obs, or of its group, rejected it
-		String latestRejected = "exists (from ObsAttestationItem i where i.obs = %s and i.outcome = :rejected"
-		        + " and not exists (from ObsAttestationItem later where later.obs = i.obs"
-		        + " and later.obsAttestationItemId > i.obsAttestationItemId))";
+		// a rejected obs is voided, so what is preliminary and not voided is what still waits
 		return sessionFactory.getCurrentSession()
-		        .createQuery(
-		            "from Obs o where o.person = :person and o.voided = false and o.status = :preliminary" + " and not "
-		                    + String.format(latestRejected, "o") + " and (o.obsGroup is null or not "
-		                    + String.format(latestRejected, "o.obsGroup") + ")" + " order by o.obsDatetime, o.obsId",
+		        .createQuery("from Obs o where o.person = :person and o.voided = false and o.status = :preliminary"
+		                + " order by o.obsDatetime, o.obsId",
 		            Obs.class)
-		        .setParameter("person", person).setParameter("preliminary", Obs.Status.PRELIMINARY)
-		        .setParameter("rejected", ObsAttestationItem.Outcome.REJECTED).list();
+		        .setParameter("person", person).setParameter("preliminary", Obs.Status.PRELIMINARY).list();
 	}
 
 	@Override

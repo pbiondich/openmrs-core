@@ -111,7 +111,7 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void attest_shouldLeaveARejectedObsPreliminaryAndNoLongerPending() {
+	public void attest_shouldVoidARejectedObsAsEnteredInError() {
 		Obs rejected = preliminaryObs(50d);
 		Obs deferred = preliminaryObs(51d);
 		Patient patient = encounter.getPatient();
@@ -119,8 +119,10 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 		attest(new ObsAttestationItem(rejected, Outcome.REJECTED),
 		    new ObsAttestationItem(deferred, Outcome.LEFT_PRELIMINARY));
 
-		assertEquals(Obs.Status.PRELIMINARY, reload(rejected).getStatus());
-		assertEquals(Outcome.REJECTED, attestationService.getObsAttestationItems(rejected).get(0).getOutcome());
+		Obs invalidated = reload(rejected);
+		assertTrue(invalidated.getVoided());
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, invalidated.getStatus());
+		assertEquals(Outcome.REJECTED, attestationService.getObsAttestationItems(invalidated).get(0).getOutcome());
 		List<Obs> pending = attestationService
 		        .getPendingForPatient(Context.getPatientService().getPatient(patient.getPatientId()));
 		assertFalse(pending.contains(rejected));
@@ -228,18 +230,30 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 		attest(new ObsAttestationItem(parent, Outcome.ACCEPTED), new ObsAttestationItem(reload(rejected), Outcome.REJECTED));
 
 		assertEquals(Obs.Status.FINAL, reload(kept).getStatus());
-		assertEquals(Obs.Status.PRELIMINARY, reload(rejected).getStatus());
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, reload(rejected).getStatus());
 	}
 
 	@Test
-	public void getPendingForPatient_shouldIncludeAnObsWhoseLatestAttestationNoLongerRejectsIt() {
+	public void attest_shouldFailToAcceptAMemberOfAGroupItRejects() {
+		Obs parent = newObs(null);
+		parent.setConcept(Context.getConceptService().getConcept(23));
+		Obs member = newObs(50d);
+		parent.addGroupMember(member);
+		parent.setAsserter(extractor);
+		Context.getObsService().saveObs(parent, null);
+		Obs savedParent = reload(parent);
+		Obs savedMember = reload(member);
+
+		assertThrows(APIException.class, () -> attest(new ObsAttestationItem(savedParent, Outcome.REJECTED),
+		    new ObsAttestationItem(savedMember, Outcome.ACCEPTED)));
+	}
+
+	@Test
+	public void attest_shouldFailForAnObsAlreadyRejected() {
 		Obs obs = preliminaryObs(50d);
 		attest(new ObsAttestationItem(obs, Outcome.REJECTED));
-		assertFalse(pending().contains(reload(obs)));
 
-		attest(new ObsAttestationItem(reload(obs), Outcome.LEFT_PRELIMINARY));
-
-		assertTrue(pending().contains(reload(obs)));
+		assertThrows(APIException.class, () -> attest(new ObsAttestationItem(reload(obs), Outcome.ACCEPTED)));
 	}
 
 	@Test
@@ -253,7 +267,9 @@ public class AttestationServiceTest extends BaseContextSensitiveTest {
 
 		attest(new ObsAttestationItem(reload(parent), Outcome.REJECTED));
 
-		assertFalse(pending().contains(reload(member)));
+		Obs invalidated = reload(member);
+		assertEquals(Obs.Status.ENTERED_IN_ERROR, invalidated.getStatus());
+		assertFalse(pending().contains(invalidated));
 	}
 
 	private List<Obs> pending() {

@@ -32,12 +32,14 @@ public interface AttestationService extends OpenmrsService {
 	 * Records a person's attestation of preliminary obs and carries out each outcome: an accepted obs
 	 * becomes final on the same row, together with the preliminary members of its group; an amended obs
 	 * is replaced by the item's superseding obs, saved final with the attester as its asserter; a
-	 * rejected obs, or one left preliminary, is unchanged, the item being the only record.
+	 * rejected obs is invalid, so it is voided as entered in error with the members of its group; an
+	 * obs left preliminary is unchanged. The attestation records who did each, and when.
 	 * <p>
 	 * <strong>Should</strong> make an accepted obs final on the same row<br/>
 	 * <strong>Should</strong> make the preliminary members of an accepted group final<br/>
 	 * <strong>Should</strong> replace an amended obs with a final version the attester asserts<br/>
-	 * <strong>Should</strong> leave a rejected obs preliminary<br/>
+	 * <strong>Should</strong> void a rejected obs as entered in error<br/>
+	 * <strong>Should</strong> fail to accept a member of a group it rejects<br/>
 	 * <strong>Should</strong> fail for an attester who is not a person<br/>
 	 * <strong>Should</strong> fail for an attester who is not the authenticated user<br/>
 	 * <strong>Should</strong> fail for an obs that is not preliminary<br/>
@@ -76,13 +78,12 @@ public interface AttestationService extends OpenmrsService {
 	List<ObsAttestationItem> getObsAttestationItems(Obs obs);
 
 	/**
-	 * The obs about a patient that wait for attestation: preliminary, not voided, and not rejected by
-	 * the latest attestation of the obs or of its group. A rejected obs can still be attested again.
+	 * The obs about a patient that wait for attestation: preliminary and not voided. A rejected obs is
+	 * voided, so it no longer waits.
 	 * <p>
-	 * <strong>Should</strong> return preliminary obs that no attestation rejected<br/>
+	 * <strong>Should</strong> return preliminary obs that are not voided<br/>
 	 * <strong>Should</strong> include obs left preliminary<br/>
-	 * <strong>Should</strong> include an obs whose latest attestation no longer rejects it<br/>
-	 * <strong>Should</strong> leave out the members of a rejected group
+	 * <strong>Should</strong> leave out rejected obs and the members of a rejected group
 	 *
 	 * @param patient a patient
 	 * @return the obs, oldest first

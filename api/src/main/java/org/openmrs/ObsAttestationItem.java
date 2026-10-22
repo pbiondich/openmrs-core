@@ -27,8 +27,8 @@ import org.hibernate.envers.Audited;
 import org.hibernate.type.SqlTypes;
 
 /**
- * What an attestation made of one preliminary obs. The outcome is the only record that an obs was
- * rejected: a rejected obs stays preliminary and is otherwise unchanged.
+ * What an attestation made of one preliminary obs, and so the record of who accepted, amended or
+ * rejected it, and when.
  *
  * @since 3.0.0
  */
@@ -49,7 +49,7 @@ public class ObsAttestationItem extends BaseOpenmrsObject {
 		 */
 		ACCEPTED,
 		/**
-		 * The obs is wrong; it stays preliminary, with this outcome as the record.
+		 * The obs is wrong: it is voided as entered in error, and this item records who rejected it.
 		 */
 		REJECTED,
 		/**
