@@ -137,16 +137,30 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 	}
 
 	/**
+	 * A user's type never changes, and a human user must have a person. The database does not enforce
+	 * either and validation can be disabled, so the service does. Callers check this before running any
+	 * query, because a query flushes the user's changes.
+	 */
+	private void checkTypeAndPerson(User user) {
+		if (user.getUserId() != null) {
+			UserType storedType = dao.getStoredUserType(user.getUserId());
+			if (storedType != null && storedType != user.getUserType()) {
+				throw new APIException("A user's type cannot be changed");
+			}
+		}
+		if (user.getUserType() == UserType.HUMAN && user.getPerson() == null) {
+			throw new APIException("A user of type HUMAN must have a person");
+		}
+	}
+
+	/**
 	 * The service's single entry point to {@link UserDAO#saveUser(User, String)}, raising the permit
-	 * that the DAO requires of anything that can change a password. A human user must have a person;
-	 * this is checked here because the database no longer enforces it and validation can be disabled.
+	 * that the DAO requires of anything that can change a password.
 	 *
 	 * @see UserPasswordGuard
 	 */
 	private User daoSaveUser(User user, String password) {
-		if (user.getUserType() == UserType.HUMAN && user.getPerson() == null) {
-			throw new APIException("A user of type HUMAN must have a person");
-		}
+		checkTypeAndPerson(user);
 		UserPasswordGuard.enter();
 		try {
 			return dao.saveUser(user, password);
@@ -205,6 +219,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 
 		Context.requirePrivilege(PrivilegeConstants.ADD_USERS);
 
+		checkTypeAndPerson(user);
 		checkPrivileges(user);
 
 		// if a password wasn't supplied, throw an error
@@ -274,6 +289,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService, 
 
 		Context.requirePrivilege(PrivilegeConstants.EDIT_USERS);
 
+		checkTypeAndPerson(user);
 		checkPrivileges(user);
 
 		if (hasDuplicateUsername(user)) {

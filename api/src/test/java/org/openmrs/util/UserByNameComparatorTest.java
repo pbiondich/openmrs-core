@@ -18,6 +18,7 @@ import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.User;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -63,4 +64,25 @@ public class UserByNameComparatorTest {
 		assertTrue(user3.equals(it.next()), "Expected user3 to be the third in the sorted user list but wasn't");
 		assertTrue(user4.equals(it.next()), "Expected user4 to be the fourth in the sorted user list but wasn't");
 	}
+
+	@Test
+	public void compare_shouldSortUsersWithoutAPersonNameLastByUsername() {
+		Person person = new Person();
+		person.addName(new PersonName("Jane", null, "Doe"));
+		User human = new User(person);
+		human.setUsername("jdoe");
+		User extractor = new User();
+		extractor.setUsername("extractor");
+		User analyser = new User();
+		analyser.setUsername("analyser");
+
+		List<User> users = new ArrayList<>(List.of(extractor, human, analyser));
+		users.sort(new UserByNameComparator());
+
+		assertEquals(List.of(human, analyser, extractor), users);
+		UserByNameComparator comparator = new UserByNameComparator();
+		assertEquals(-Integer.signum(comparator.compare(analyser, extractor)),
+		    Integer.signum(comparator.compare(extractor, analyser)));
+	}
+
 }

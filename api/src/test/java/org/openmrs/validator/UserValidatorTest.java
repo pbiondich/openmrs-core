@@ -14,6 +14,7 @@ import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
@@ -141,6 +142,33 @@ public class UserValidatorTest extends BaseContextSensitiveTest {
 		Errors errors = new BindException(user, "user");
 		validator.validate(user, errors);
 		assertTrue(errors.hasFieldErrors("userType"));
+	}
+
+	/**
+	 * @see UserValidator#validate(Object,Errors)
+	 */
+	@Test
+	public void validate_shouldFailValidationIfAHumanUserHasNoPerson() {
+		User user = new User();
+		user.setUsername("test");
+
+		Errors errors = new BindException(user, "user");
+		validator.validate(user, errors);
+		assertTrue(errors.hasFieldErrors("person"));
+	}
+
+	/**
+	 * @see UserValidator#validate(Object,Errors)
+	 */
+	@Test
+	public void validate_shouldPassValidationIfASoftwareUserHasNoPerson() {
+		User user = new User();
+		user.setUsername("extractor");
+		user.setUserType(UserType.SOFTWARE);
+
+		Errors errors = new BindException(user, "user");
+		validator.validate(user, errors);
+		assertFalse(errors.hasErrors());
 	}
 
 	private void invokeValidateAndAssertHasErrorRetireReason(String invalidRetireReason) {

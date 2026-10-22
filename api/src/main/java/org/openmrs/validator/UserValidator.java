@@ -17,6 +17,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.validator.routines.EmailValidator;
 import org.openmrs.Person;
 import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
@@ -59,6 +60,8 @@ public class UserValidator implements Validator {
 	 * <strong>Should</strong> fail validation if retired and retireReason is empty<br/>
 	 * <strong>Should</strong> fail validation if retired and retireReason is whitespace<br/>
 	 * <strong>Should</strong> fail validation if userType is null<br/>
+	 * <strong>Should</strong> fail validation if a human user has no person<br/>
+	 * <strong>Should</strong> pass validation if a software user has no person<br/>
 	 * <strong>Should</strong> pass validation if all required fields have proper values<br/>
 	 * <strong>Should</strong> fail validation if email as username enabled and email invalid<br/>
 	 * <strong>Should</strong> fail validation if email as username disabled and email provided<br/>
@@ -82,7 +85,10 @@ public class UserValidator implements Validator {
 				errors.rejectValue("userType", "error.null");
 			}
 			if (user.getPerson() == null) {
-				errors.rejectValue("person", "error.null");
+				// only a human user must be a person; device and software users may have none
+				if (user.getUserType() == UserType.HUMAN) {
+					errors.rejectValue("person", "error.null");
+				}
 			} else {
 				// check that required person details are filled out
 				Person person = user.getPerson();
