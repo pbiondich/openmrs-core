@@ -96,6 +96,7 @@
 		<property name="conditionService" ref="conditionService"/>
 		<property name="diagnosisService" ref="diagnosisService"/>
 		<property name="attestationService" ref="attestationService"/>
+		<property name="captureService" ref="captureService"/>
 		<property name="medicationDispenseService" ref="medicationDispenseService"/>
 		<property name="orderSetService" ref="orderSetService"/>
 		<property name="formService" ref="formService"/>

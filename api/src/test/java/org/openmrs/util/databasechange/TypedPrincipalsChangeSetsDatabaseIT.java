@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 16;
+	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 17;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -66,6 +66,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertEquals("REQUIRE_ATTESTATION", getFinalizationAction(connection, "SOFTWARE"));
 			assertTrue(hasColumn(connection, "obs_attestation_item", "outcome"));
 			assertTrue(hasColumn(connection, "encounter", "dictionary_version_id"));
+			assertTrue(hasColumn(connection, "capture", "artifact_uri"));
 		}
 
 		// the assertion model changesets are the last ones in the latest update file
@@ -85,6 +86,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "obs_attestation", "attester_id"));
 			assertFalse(hasColumn(connection, "encounter", "dictionary_version_id"));
 			assertFalse(hasColumn(connection, "dictionary_version", "label"));
+			assertFalse(hasColumn(connection, "capture", "artifact_uri"));
 			assertFalse(isPersonIdNullable(connection));
 			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}

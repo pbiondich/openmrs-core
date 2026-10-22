@@ -270,6 +270,27 @@ public class PrivilegeConstants {
 	/**
 	 * @since 3.0.0
 	 */
+	/**
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to get captures, such as scanned forms and recordings, and their artifacts")
+	public static final String GET_CAPTURES = "Get Captures";
+
+	/**
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to add captures, such as scanned forms and recordings")
+	public static final String ADD_CAPTURES = "Add Captures";
+
+	/**
+	 * @since 3.0.0
+	 */
+	@AddOnStartup(description = "Able to record withdrawn consent for captures, void them and delete expired artifacts")
+	public static final String EDIT_CAPTURES = "Edit Captures";
+
+	/**
+	 * @since 3.0.0
+	 */
 	@AddOnStartup(description = "Able to get the policies that say which agents' observations need attestation")
 	public static final String GET_OBS_FINALIZATION_POLICIES = "Get Obs Finalization Policies";
 

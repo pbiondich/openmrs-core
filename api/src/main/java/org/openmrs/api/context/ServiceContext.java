@@ -23,6 +23,7 @@ import org.aopalliance.aop.Advice;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.AttestationService;
+import org.openmrs.api.CaptureService;
 import org.openmrs.api.CohortService;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.ConditionService;
@@ -235,6 +236,22 @@ public class ServiceContext implements ApplicationContextAware {
 	 */
 	public void setConditionService(ConditionService conditionService) {
 		setService(ConditionService.class, conditionService);
+	}
+
+	/**
+	 * @return capture related service
+	 * @since 3.0.0
+	 */
+	public CaptureService getCaptureService() {
+		return getService(CaptureService.class);
+	}
+
+	/**
+	 * @param captureService capture related service
+	 * @since 3.0.0
+	 */
+	public void setCaptureService(CaptureService captureService) {
+		setService(CaptureService.class, captureService);
 	}
 
 	/**

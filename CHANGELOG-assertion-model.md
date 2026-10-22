@@ -83,3 +83,12 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   version, even an unknown one. Existing encounters are not backfilled: null means unknown, which an "unknown" row
   would only restate while making every encounter row change. `ConceptService` gets versions by uuid, by label and the
   current one, and saves and retires them under the concept privileges.
+- `capture` (`Capture`, data: encounter, kind `AUDIO` | `VIDEO` | `HANDWRITTEN` | `SCANNED_FORM` | `TYPED_TEXT` |
+  `IMAGE`, artifact_uri, mime_type, consent_status `NOT_RECORDED` | `GIVEN` | `WITHDRAWN`, retention_class `KEEP` |
+  `EXPIRE`, expires_at, artifact_deleted_at). `CaptureService.createCapture` stores the artifact as a file in capture
+  storage (global property `capture.storage_dir`, default `captures` in the application data directory), never in the
+  database, named from the capture's uuid so nothing a caller sends becomes part of a path; reads refuse a uri outside
+  storage. Audio and video expire after `capture.retention_days` (default 90); every other kind is kept. The
+  `CaptureRetentionTask` deletes expired artifacts, and withdrawing consent deletes an expiring one at once; scanned
+  forms and other kept artifacts are never deleted, and the row always stays. Privileges `Get Captures`,
+  `Add Captures` and `Edit Captures`.

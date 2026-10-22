@@ -315,6 +315,20 @@ public final class OpenmrsConstants {
 
 	public static final String GLOBAL_PROPERTY_COMPLEX_OBS_DIR = "obs.complex_obs_dir";
 
+	/**
+	 * Where capture artifacts are stored: a folder in the application data directory, or a full path.
+	 *
+	 * @since 3.0.0
+	 */
+	public static final String GLOBAL_PROPERTY_CAPTURE_DIR = "capture.storage_dir";
+
+	/**
+	 * How many days audio and video capture artifacts are kept before they expire.
+	 *
+	 * @since 3.0.0
+	 */
+	public static final String GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS = "capture.retention_days";
+
 	public static final String GLOBAL_PROPERTY_MIN_SEARCH_CHARACTERS = "minSearchCharacters";
 
 	public static final int GLOBAL_PROPERTY_DEFAULT_MIN_SEARCH_CHARACTERS = 2;
@@ -796,6 +810,12 @@ public final class OpenmrsConstants {
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_PATIENT_IDENTIFIER_IMPORTANT_TYPES, "",
 		        "A comma delimited list of PatientIdentifier names : PatientIdentifier locations that will be displayed on the patient dashboard.  E.g.: TRACnet ID:Rwanda,ELDID:Kenya"));
+
+		props.add(new GlobalProperty(GLOBAL_PROPERTY_CAPTURE_DIR, "captures",
+		        "Where capture artifacts, such as scanned forms and recordings, are stored: a folder in the application data directory, or a full path"));
+
+		props.add(new GlobalProperty(GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS, "90",
+		        "How many days audio and video capture artifacts are kept before they expire; other kinds are kept"));
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_COMPLEX_OBS_DIR, "complex_obs",
 		        "Default directory for storing complex obs."));
