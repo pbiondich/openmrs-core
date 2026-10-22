@@ -9,6 +9,8 @@
  */
 package org.openmrs.api.capture;
 
+import org.openmrs.Capture;
+import org.openmrs.api.CaptureService;
 import org.openmrs.api.context.Context;
 import org.openmrs.scheduler.TaskContext;
 import org.openmrs.scheduler.TaskHandler;
@@ -18,9 +20,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Deletes the capture artifacts that have expired, keeping their captures.
+ * Deletes the capture artifacts that have expired, keeping their captures. Each is deleted in its
+ * own transaction, so one that cannot be deleted is logged, tried again on the next run, and does
+ * not stop the rest.
  *
- * @see org.openmrs.api.CaptureService#deleteExpiredArtifacts()
+ * @see org.openmrs.api.CaptureService#deleteExpiredArtifact(Capture)
  * @since 3.0.0
  */
 @Component
@@ -32,8 +36,21 @@ public class CaptureRetentionTaskHandler implements TaskHandler<CaptureRetention
 	public void execute(CaptureRetentionTaskData taskData, TaskContext taskContext) {
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.EDIT_CAPTURES);
-			int deleted = Context.getCaptureService().deleteExpiredArtifacts();
-			log.info("Deleted {} expired capture artifacts", deleted);
+			CaptureService captureService = Context.getCaptureService();
+			int deleted = 0;
+			int failed = 0;
+			for (Capture capture : captureService.getCapturesWithArtifactsToDelete()) {
+				try {
+					if (captureService.deleteExpiredArtifact(capture)) {
+						deleted++;
+					}
+				} catch (RuntimeException e) {
+					failed++;
+					log.error("Could not delete the artifact of capture {}; trying again on the next run", capture.getUuid(),
+					    e);
+				}
+			}
+			log.info("Deleted {} expired capture artifacts; {} could not be deleted", deleted, failed);
 		} finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.EDIT_CAPTURES);
 		}

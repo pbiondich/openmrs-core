@@ -37,6 +37,9 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> keep a scanned form and expire audio<br/>
 	 * <strong>Should</strong> ignore an expiry, key or checksum the caller set<br/>
 	 * <strong>Should</strong> fail for a capture that is already saved<br/>
+	 * <strong>Should</strong> fail for a capture whose consent is already withdrawn<br/>
+	 * <strong>Should</strong> keep the consent the caller recorded<br/>
+	 * <strong>Should</strong> expire audio after the configured number of days<br/>
 	 * <strong>Should</strong> fail for a media type the kind does not allow<br/>
 	 * <strong>Should</strong> fail for an artifact over the size limit<br/>
 	 * <strong>Should</strong> delete the artifact if the transaction rolls back
@@ -102,22 +105,43 @@ public interface CaptureService extends OpenmrsService {
 	Capture withdrawConsent(Capture capture);
 
 	/**
-	 * Deletes the artifacts that have expired, or would expire and whose consent was withdrawn, keeping
-	 * their captures; never one that is kept. One artifact that cannot be deleted does not stop the
-	 * rest.
-	 * <p>
-	 * <strong>Should</strong> delete an expired audio artifact<br/>
-	 * <strong>Should</strong> never delete a scanned form<br/>
-	 * <strong>Should</strong> not delete an artifact that has not expired
+	 * <strong>Should</strong> return audio that has expired or whose consent was withdrawn<br/>
+	 * <strong>Should</strong> never return a scanned form<br/>
+	 * <strong>Should</strong> not return an artifact that has not expired
 	 *
-	 * @return how many artifacts were deleted
+	 * @return the captures whose artifact expires and is still stored, and that have expired or whose
+	 *         consent was withdrawn, oldest first
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
 	 */
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.EDIT_CAPTURES + "')")
-	int deleteExpiredArtifacts();
+	List<Capture> getCapturesWithArtifactsToDelete();
 
 	/**
+	 * Deletes a capture's artifact if, going by the database, it has expired or would expire and its
+	 * consent was withdrawn; never one that is kept. The capture stays. The retention task calls this
+	 * once per capture, each in its own transaction, so one failure does not stop the rest.
+	 * <p>
+	 * <strong>Should</strong> delete an expired audio artifact<br/>
+	 * <strong>Should</strong> never delete a scanned form<br/>
+	 * <strong>Should</strong> not delete an artifact that has not expired<br/>
+	 * <strong>Should</strong> fail if storage still has the artifact after deleting it<br/>
+	 * <strong>Should</strong> never delete a key outside capture storage
+	 *
+	 * @param capture a saved capture
+	 * @return true if the artifact was due and so deleted
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.EDIT_CAPTURES + "')")
+	boolean deleteExpiredArtifact(Capture capture);
+
+	/**
+	 * Voids a saved capture; its artifact is no longer served.
+	 * <p>
+	 * <strong>Should</strong> void a saved capture<br/>
+	 * <strong>Should</strong> fail for a capture that is not saved
+	 *
 	 * @param capture the capture to void
 	 * @param reason why it is voided
 	 * @return the voided capture

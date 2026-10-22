@@ -91,7 +91,9 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   text; never HTML or SVG), artifacts are capped at `capture.max_size_mb` (default 100) and checksummed with SHA-256.
   Audio and video expire after `capture.retention_days` (default 90); every other kind is kept, and a null expires_at
   means kept. Once saved, the key, checksum, expiry, consent and deletion columns are read-only in the mapping; the
-  service changes consent and deletion with bulk updates, going by what is in the database. A daily
-  `CaptureRetentionTaskHandler` on the new scheduler deletes expired artifacts, one failure not stopping the rest, and
-  withdrawing consent deletes an expiring one at once; scanned forms and other kept artifacts are never deleted, the row
+  service changes consent and deletion with bulk updates, going by what is in the database (Envers does not see those),
+  and `voidCapture` refuses an unsaved capture. A daily `CaptureRetentionTaskHandler` on the new scheduler deletes
+  expired artifacts, each in its own transaction so one failure does not stop the rest; a delete only counts once
+  storage no longer has the artifact, and only keys under `captures/` are ever deleted. Withdrawing consent deletes an
+  expiring one at once; scanned forms and other kept artifacts are never deleted, the row
   always stays, and voided captures are not served. Privileges `Get Captures`, `Add Captures` and `Edit Captures`.

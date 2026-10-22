@@ -35,7 +35,8 @@ import org.hibernate.type.SqlTypes;
  * <p>
  * Only {@link org.openmrs.api.CaptureService} sets a capture's storage key, checksum, expiry and
  * deletion, and once saved none of them, nor the consent, can be changed by saving the capture
- * again: the service changes consent and deletion in the database itself.
+ * again: the service changes consent and deletion in the database itself, and those bulk updates
+ * record changed_by and date_changed but bypass Envers, so the audit tables do not show them.
  *
  * @since 3.0.0
  */

@@ -30,9 +30,6 @@ import org.springframework.stereotype.Repository;
 @Repository("captureDAO")
 public class HibernateCaptureDAO implements CaptureDAO {
 
-	private static final String TO_DELETE = "artifactDeletedAt is null and expiresAt is not null"
-	        + " and (expiresAt <= :now or consentStatus = :withdrawn)";
-
 	private final SessionFactory sessionFactory;
 
 	@Autowired
@@ -61,13 +58,14 @@ public class HibernateCaptureDAO implements CaptureDAO {
 	@Override
 	public Capture reload(Capture capture) {
 		Session session = sessionFactory.getCurrentSession();
-		if (session.contains(capture)) {
-			// so a refresh does not lose a pending void
+		Capture managed = session.contains(capture) ? capture : session.get(Capture.class, capture.getCaptureId());
+		if (managed != null) {
+			// flush first so a refresh does not lose a pending void; refresh, since bulk updates bypass the
+			// session
 			session.flush();
-			session.refresh(capture);
-			return capture;
+			session.refresh(managed);
 		}
-		return session.get(Capture.class, capture.getCaptureId());
+		return managed;
 	}
 
 	@Override
@@ -78,18 +76,12 @@ public class HibernateCaptureDAO implements CaptureDAO {
 	}
 
 	@Override
-	public List<Integer> getCaptureIdsWithArtifactsToDelete(Date now) {
+	public List<Capture> getCapturesWithArtifactsToDelete(Date now) {
 		return sessionFactory.getCurrentSession()
-		        .createQuery("select captureId from Capture where " + TO_DELETE + " order by captureId", Integer.class)
+		        .createQuery("from Capture where artifactDeletedAt is null and expiresAt is not null"
+		                + " and (expiresAt <= :now or consentStatus = :withdrawn) order by captureId",
+		            Capture.class)
 		        .setParameter("now", now).setParameter("withdrawn", Capture.ConsentStatus.WITHDRAWN).list();
-	}
-
-	@Override
-	public String getArtifactKeyToDelete(Integer captureId, Date now) {
-		return sessionFactory.getCurrentSession()
-		        .createQuery("select artifactKey from Capture where captureId = :id and " + TO_DELETE, String.class)
-		        .setParameter("id", captureId).setParameter("now", now)
-		        .setParameter("withdrawn", Capture.ConsentStatus.WITHDRAWN).uniqueResult();
 	}
 
 	@Override

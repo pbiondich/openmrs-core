@@ -15,6 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,9 +26,12 @@ import org.openmrs.Capture.Kind;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.impl.CaptureServiceImpl;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
 import org.openmrs.util.OpenmrsConstants;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -38,6 +44,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link CaptureService}.
@@ -114,10 +123,14 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void createCapture_shouldFailForAnArtifactOverTheSizeLimit() {
+	public void createCapture_shouldFailForAnArtifactOverTheSizeLimit() throws Exception {
 		Context.getAdministrationService()
 		        .saveGlobalProperty(new GlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_MAX_SIZE_MB, "1"));
 		byte[] tooLarge = new byte[1024 * 1024 + 1];
+		long keysBefore;
+		try (Stream<String> keys = storageService.getKeys(CaptureServiceImpl.STORAGE_GROUP, "")) {
+			keysBefore = keys.count();
+		}
 
 		assertThrows(APIException.class,
 		    () -> captureService.createCapture(new Capture(encounter, Kind.SCANNED_FORM, "application/pdf"),
@@ -199,32 +212,143 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void deleteExpiredArtifacts_shouldDeleteAnExpiredAudioArtifact() {
+	public void getCapturesWithArtifactsToDelete_shouldReturnAudioThatHasExpiredOrWhoseConsentWasWithdrawn() {
 		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
+		Capture withdrawn = create(Kind.AUDIO, "audio/mpeg");
+		Context.getAdministrationService().executeSQL(
+		    "update capture set consent_status = 'WITHDRAWN' where capture_id = " + withdrawn.getCaptureId(), false);
 
-		assertEquals(1, captureService.deleteExpiredArtifacts());
-
-		Context.refreshEntity(expired);
-		assertNotNull(expired.getArtifactDeletedAt());
-		assertFalse(storageService.exists(expired.getArtifactKey()));
+		assertEquals(List.of(expired, withdrawn), captureService.getCapturesWithArtifactsToDelete());
 	}
 
 	@Test
-	public void deleteExpiredArtifacts_shouldNeverDeleteAScannedForm() {
+	public void getCapturesWithArtifactsToDelete_shouldNeverReturnAScannedForm() {
+		Capture form = create(Kind.SCANNED_FORM, "application/pdf");
+		Context.getAdministrationService().executeSQL("update capture set consent_status = 'WITHDRAWN', expires_at = NULL"
+		        + " where capture_id = " + form.getCaptureId(),
+		    false);
+
+		assertTrue(captureService.getCapturesWithArtifactsToDelete().isEmpty());
+	}
+
+	@Test
+	public void getCapturesWithArtifactsToDelete_shouldNotReturnAnArtifactThatHasNotExpired() {
+		create(Kind.AUDIO, "audio/mpeg");
+
+		assertTrue(captureService.getCapturesWithArtifactsToDelete().isEmpty());
+	}
+
+	@Test
+	public void deleteExpiredArtifact_shouldDeleteAnExpiredAudioArtifact() {
+		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
+
+		assertTrue(captureService.deleteExpiredArtifact(expired));
+
+		assertNotNull(expired.getArtifactDeletedAt());
+		assertFalse(storageService.exists(expired.getArtifactKey()));
+		assertTrue(captureService.getCapturesWithArtifactsToDelete().isEmpty());
+	}
+
+	@Test
+	public void deleteExpiredArtifact_shouldNeverDeleteAScannedForm() {
 		Capture form = create(Kind.SCANNED_FORM, "application/pdf");
 
-		assertEquals(0, captureService.deleteExpiredArtifacts());
+		assertFalse(captureService.deleteExpiredArtifact(form));
 
 		assertTrue(storageService.exists(form.getArtifactKey()));
 	}
 
 	@Test
-	public void deleteExpiredArtifacts_shouldNotDeleteAnArtifactThatHasNotExpired() {
+	public void deleteExpiredArtifact_shouldNotDeleteAnArtifactThatHasNotExpired() {
 		Capture audio = create(Kind.AUDIO, "audio/mpeg");
+		// what the caller's object says does not count
+		audio.setExpiresAt(new Date(0));
 
-		assertEquals(0, captureService.deleteExpiredArtifacts());
+		assertFalse(captureService.deleteExpiredArtifact(audio));
 
 		assertTrue(storageService.exists(audio.getArtifactKey()));
+	}
+
+	@Test
+	public void deleteExpiredArtifact_shouldFailIfStorageStillHasTheArtifactAfterDeletingIt() throws Exception {
+		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
+		StorageService stubborn = mock(StorageService.class);
+		when(stubborn.purgeData(anyString())).thenReturn(true);
+		when(stubborn.exists(anyString())).thenReturn(true);
+		ReflectionTestUtils.setField(unproxied(), "storageService", stubborn);
+		try {
+			assertThrows(APIException.class, () -> captureService.deleteExpiredArtifact(expired));
+		} finally {
+			ReflectionTestUtils.setField(unproxied(), "storageService", storageService);
+		}
+		assertNull(expired.getArtifactDeletedAt());
+	}
+
+	@Test
+	public void deleteExpiredArtifact_shouldNeverDeleteAKeyOutsideCaptureStorage() throws Exception {
+		String other = storageService.saveData(new ByteArrayInputStream(CONTENT), null, "complex_obs");
+		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
+		Context.getAdministrationService().executeSQL(
+		    "update capture set artifact_key = '" + other + "' where capture_id = " + expired.getCaptureId(), false);
+		Context.refreshEntity(expired);
+
+		assertThrows(APIException.class, () -> captureService.deleteExpiredArtifact(expired));
+
+		assertTrue(storageService.exists(other));
+		storageService.purgeData(other);
+	}
+
+	@Test
+	public void voidCapture_shouldVoidASavedCapture() {
+		Capture capture = captureService.voidCapture(create(Kind.SCANNED_FORM, "application/pdf"), "wrong patient");
+
+		assertTrue(capture.getVoided());
+		assertTrue(captureService.getCapturesByEncounter(encounter).isEmpty());
+	}
+
+	@Test
+	public void voidCapture_shouldFailForACaptureThatIsNotSaved() {
+		Capture capture = new Capture(encounter, Kind.AUDIO, "audio/mpeg");
+		capture.setArtifactKey("openmrs-runtime.properties");
+		capture.setSha256("0".repeat(64));
+		capture.setExpiresAt(new Date(0));
+
+		assertThrows(APIException.class, () -> captureService.voidCapture(capture, "planting a key"));
+	}
+
+	@Test
+	public void createCapture_shouldFailForACaptureWhoseConsentIsAlreadyWithdrawn() {
+		Capture capture = new Capture(encounter, Kind.AUDIO, "audio/mpeg");
+		capture.setConsentStatus(Capture.ConsentStatus.WITHDRAWN);
+
+		assertThrows(APIException.class, () -> captureService.createCapture(capture, new ByteArrayInputStream(CONTENT)));
+	}
+
+	@Test
+	public void createCapture_shouldKeepTheConsentTheCallerRecorded() {
+		Capture capture = new Capture(encounter, Kind.AUDIO, "audio/mpeg");
+		capture.setConsentStatus(Capture.ConsentStatus.GIVEN);
+
+		captureService.createCapture(capture, new ByteArrayInputStream(CONTENT));
+		Context.refreshEntity(capture);
+
+		assertEquals(Capture.ConsentStatus.GIVEN, capture.getConsentStatus());
+	}
+
+	@Test
+	public void createCapture_shouldExpireAudioAfterTheConfiguredNumberOfDays() {
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS, "2"));
+		long before = System.currentTimeMillis();
+
+		Capture audio = create(Kind.AUDIO, "audio/mpeg");
+
+		long days = TimeUnit.MILLISECONDS.toDays(audio.getExpiresAt().getTime() - before + 1000);
+		assertEquals(2, days);
+	}
+
+	private CaptureServiceImpl unproxied() throws Exception {
+		return (CaptureServiceImpl) AopTestUtils.getUltimateTargetObject(captureService);
 	}
 
 	private Capture create(Kind kind, String mimeType) {

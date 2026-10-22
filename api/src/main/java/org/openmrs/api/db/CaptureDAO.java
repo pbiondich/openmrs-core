@@ -31,7 +31,7 @@ public interface CaptureDAO {
 	/**
 	 * @param capture a saved capture
 	 * @return the capture as it is in the database, after saving any pending changes the mapping lets
-	 *         through
+	 *         through; null if it is not in the database
 	 */
 	Capture reload(Capture capture);
 
@@ -44,17 +44,10 @@ public interface CaptureDAO {
 
 	/**
 	 * @param now the time to judge expiry by
-	 * @return the ids of the captures whose artifact expires and is still stored, and that have expired
-	 *         or whose consent was withdrawn
+	 * @return the captures whose artifact expires and is still stored, and that have expired or whose
+	 *         consent was withdrawn
 	 */
-	List<Integer> getCaptureIdsWithArtifactsToDelete(Date now);
-
-	/**
-	 * @param captureId a capture
-	 * @return its artifact's key, if the artifact expires and is still stored, and it has expired or
-	 *         its consent was withdrawn; otherwise null
-	 */
-	String getArtifactKeyToDelete(Integer captureId, Date now);
+	List<Capture> getCapturesWithArtifactsToDelete(Date now);
 
 	/**
 	 * Records consent as withdrawn, in the database.

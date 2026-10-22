@@ -12,6 +12,7 @@ package org.openmrs.api.impl;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -23,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.Encounter;
@@ -56,7 +58,7 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	/**
 	 * The storage group capture artifacts are kept under.
 	 */
-	static final String STORAGE_GROUP = "captures";
+	public static final String STORAGE_GROUP = "captures";
 
 	private static final int DEFAULT_RETENTION_DAYS = 90;
 
@@ -104,9 +106,11 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		try {
 			// storage picks the key, so nothing the caller sends becomes part of a path
 			key = storageService.saveData(in, ObjectMetadata.builder().setMimeType(mimeType).build(), STORAGE_GROUP);
-		} catch (TooLargeException e) {
-			throw new APIException("Capture.error.tooLarge", new Object[] { maxSizeMb() }, e);
 		} catch (IOException e) {
+			// some storage wraps the stream's exception
+			if (ExceptionUtils.indexOfThrowable(e, TooLargeException.class) >= 0) {
+				throw new APIException("Capture.error.tooLarge", new Object[] { maxSizeMb() }, e);
+			}
 			throw new APIException("Capture.error.store", (Object[]) null, e);
 		}
 		purgeIfRolledBack(key);
@@ -159,30 +163,29 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	 */
 	@Override
 	public Capture withdrawConsent(Capture capture) {
-		Integer captureId = reload(capture).getCaptureId();
-		dao.withdrawConsent(captureId);
+		Capture saved = saved(capture);
+		dao.withdrawConsent(saved.getCaptureId());
+		dao.reload(saved);
 		// an artifact that would expire is now due for deletion; one that is kept is not
-		deleteArtifact(captureId, new Date());
-		return reload(capture);
+		deleteArtifactIfDue(saved, new Date());
+		return saved;
 	}
 
 	/**
-	 * @see CaptureService#deleteExpiredArtifacts()
+	 * @see CaptureService#getCapturesWithArtifactsToDelete()
 	 */
 	@Override
-	public int deleteExpiredArtifacts() {
-		Date now = new Date();
-		int deleted = 0;
-		for (Integer captureId : dao.getCaptureIdsWithArtifactsToDelete(now)) {
-			try {
-				if (deleteArtifact(captureId, now)) {
-					deleted++;
-				}
-			} catch (APIException e) {
-				log.error("Could not delete the artifact of capture {}; trying again on the next run", captureId, e);
-			}
-		}
-		return deleted;
+	@Transactional(readOnly = true)
+	public List<Capture> getCapturesWithArtifactsToDelete() {
+		return dao.getCapturesWithArtifactsToDelete(new Date());
+	}
+
+	/**
+	 * @see CaptureService#deleteExpiredArtifact(Capture)
+	 */
+	@Override
+	public boolean deleteExpiredArtifact(Capture capture) {
+		return deleteArtifactIfDue(saved(capture), new Date());
 	}
 
 	/**
@@ -190,30 +193,50 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	 */
 	@Override
 	public Capture voidCapture(Capture capture, String reason) {
+		// only a saved capture: saving a new one here would skip createCapture and insert whatever key the
+		// caller set
+		if (capture.getCaptureId() == null) {
+			throw new APIException("Capture.error.notSaved", (Object[]) null);
+		}
 		return dao.saveCapture(capture);
 	}
 
 	/**
-	 * Deletes a capture's artifact if, going by the database, it is due for deletion.
+	 * Deletes a capture's artifact if, going by the capture as reloaded from the database, it is due:
+	 * it expires, is still stored, and has expired or its consent was withdrawn. The file is deleted
+	 * before the row is marked, so a rollback can only leave a row that the next run marks, never a
+	 * file the row says is gone.
 	 *
 	 * @return true if it was due and so deleted
 	 */
-	private boolean deleteArtifact(Integer captureId, Date now) {
-		String key = dao.getArtifactKeyToDelete(captureId, now);
-		if (key == null) {
+	private boolean deleteArtifactIfDue(Capture capture, Date now) {
+		if (capture.getArtifactDeletedAt() != null || capture.getExpiresAt() == null
+		        || (capture.getExpiresAt().after(now) && capture.getConsentStatus() != Capture.ConsentStatus.WITHDRAWN)) {
 			return false;
+		}
+		String key = capture.getArtifactKey();
+		// never delete outside capture storage, whatever a row says
+		if (key == null || !key.startsWith(STORAGE_GROUP + "/") || key.contains("..")) {
+			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() });
 		}
 		try {
 			// an artifact already gone, say after a rolled back run, still counts as deleted
 			storageService.purgeData(key);
-		} catch (IOException e) {
-			throw new APIException("Capture.error.delete", new Object[] { captureId }, e);
+			if (storageService.exists(key)) {
+				throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() });
+			}
+		} catch (IOException | UncheckedIOException e) {
+			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() }, e);
 		}
-		dao.markArtifactDeleted(captureId, now);
+		dao.markArtifactDeleted(capture.getCaptureId(), now);
+		dao.reload(capture);
 		return true;
 	}
 
-	private Capture reload(Capture capture) {
+	/**
+	 * @return the capture as it now is in the database
+	 */
+	private Capture saved(Capture capture) {
 		Capture saved = capture.getCaptureId() == null ? null : dao.reload(capture);
 		if (saved == null) {
 			throw new APIException("Capture.error.notSaved", (Object[]) null);
@@ -233,7 +256,8 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 
 			@Override
 			public void afterCompletion(int status) {
-				if (status != STATUS_COMMITTED) {
+				// not on an unknown outcome, which may have committed the capture
+				if (status == STATUS_ROLLED_BACK) {
 					try {
 						storageService.purgeData(key);
 					} catch (IOException | RuntimeException e) {

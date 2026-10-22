@@ -687,7 +687,8 @@
 			referencedTableName="users" referencedColumnNames="user_id"/>
 		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="voided_by" constraintName="capture_voided_by"
 			referencedTableName="users" referencedColumnNames="user_id"/>
-		<createIndex tableName="capture" indexName="capture_expires_at_idx">
+		<createIndex tableName="capture" indexName="capture_retention_idx">
+			<column name="artifact_deleted_at"/>
 			<column name="expires_at"/>
 		</createIndex>
 		<rollback>
