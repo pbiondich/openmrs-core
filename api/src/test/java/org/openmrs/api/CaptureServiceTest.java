@@ -26,6 +26,8 @@ import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Obs;
+import org.openmrs.ObsFinalizationPolicy;
+import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.CaptureServiceImpl;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -288,11 +290,73 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
-	public void purgeObs_shouldRefuseAnObsWhoseFileACaptureHolds() {
+	public void purgeObs_shouldDeleteAnUnusedCaptureWithTheObsHoldingItsFile() {
 		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
 
-		assertThrows(APIException.class, () -> Context.getObsService().purgeObs(capture.getObs()));
-		assertTrue(storageService.exists(key(capture)));
+		Context.getObsService().purgeObs(capture.getObs());
+
+		assertNull(captureService.getCaptureByUuid(capture.getUuid()));
+	}
+
+	@Test
+	public void purgeObs_shouldRefuseAnObsWhoseFileACaptureThatIsPointedToHolds() {
+		Capture recording = create(Kind.AUDIO, "audio/mpeg");
+		Capture transcript = new Capture(encounter, Kind.TYPED_TEXT, "text/plain");
+		transcript.setDerivedFrom(recording);
+		captureService.createCapture(transcript, concept, new ByteArrayInputStream(CONTENT));
+
+		assertThrows(APIException.class, () -> Context.getObsService().purgeObs(recording.getObs()));
+		assertTrue(storageService.exists(key(recording)));
+	}
+
+	@Test
+	public void createCapture_shouldFailForAUuidThatIsNotAUuid() {
+		Capture capture = new Capture(encounter, Kind.SCANNED_FORM, "application/pdf");
+		capture.setUuid("x|openmrs-runtime.properties");
+
+		assertThrows(APIException.class,
+		    () -> captureService.createCapture(capture, concept, new ByteArrayInputStream(CONTENT)));
+	}
+
+	@Test
+	public void createCapture_shouldFailForAVoidedEncounter() {
+		Encounter voided = Context.getEncounterService().voidEncounter(encounter, "wrong patient");
+
+		assertThrows(APIException.class,
+		    () -> captureService.createCapture(new Capture(voided, Kind.SCANNED_FORM, "application/pdf"), concept,
+		        new ByteArrayInputStream(CONTENT)));
+	}
+
+	@Test
+	public void createCapture_shouldSaveTheArtifactsObsFinalWhateverTheFinalizationPolicy() {
+		Context.getObsService().saveObsFinalizationPolicy(new ObsFinalizationPolicy("people need attestation",
+		        UserType.HUMAN, null, ObsFinalizationPolicy.Action.REQUIRE_ATTESTATION));
+
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+
+		assertEquals(Obs.Status.FINAL, capture.getObs().getStatus());
+	}
+
+	@Test
+	public void getArtifact_shouldFailWhenTheArtifactsObsWasVoidedOtherThanByAnEdit() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+
+		Context.getObsService().voidObs(capture.getObs(), "wrong patient");
+
+		assertThrows(APIException.class, () -> captureService.getArtifact(capture));
+	}
+
+	@Test
+	public void deleteExpiredArtifact_shouldVoidEveryLiveVersionOfTheArtifactsObs() {
+		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
+		Obs obs = expired.getObs();
+		obs.setComment("the end is inaudible");
+		Obs edited = Context.getObsService().saveObs(obs, "a comment");
+
+		captureService.deleteExpiredArtifact(expired);
+
+		assertTrue(edited.getVoided());
+		assertTrue(Context.getObsService().getObsByUuid(edited.getUuid()).getVoided());
 	}
 
 	@Test

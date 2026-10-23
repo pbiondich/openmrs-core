@@ -77,17 +77,30 @@ public class HibernateCaptureDAO implements CaptureDAO {
 	}
 
 	@Override
-	public void voidArtifactObs(Integer obsId, String reason, Date voidedAt) {
-		sessionFactory.getCurrentSession()
-		        .createMutationQuery("update Obs set voided = true, voidedBy = :user, dateVoided = :voidedAt,"
-		                + " voidReason = :reason where obsId = :id and voided = false")
-		        .setParameter("user", Context.getAuthenticatedUser()).setParameter("voidedAt", voidedAt)
-		        .setParameter("reason", reason).setParameter("id", obsId).executeUpdate();
-		// the session may hold the obs as it was before the update
-		Obs obs = sessionFactory.getCurrentSession().get(Obs.class, obsId);
-		if (obs != null) {
-			sessionFactory.getCurrentSession().refresh(obs);
+	public void voidArtifactObs(String valueComplex, String reason, Date voidedAt) {
+		// through the session, so Envers and the obs interceptors see the void
+		for (Obs obs : sessionFactory.getCurrentSession()
+		        .createQuery("from Obs where valueComplex = :value and voided = false", Obs.class)
+		        .setParameter("value", valueComplex).list()) {
+			obs.setVoided(true);
+			obs.setVoidedBy(Context.getAuthenticatedUser());
+			obs.setDateVoided(voidedAt);
+			obs.setVoidReason(reason);
 		}
+	}
+
+	@Override
+	public void finalizeArtifactObs(Obs obs) {
+		sessionFactory.getCurrentSession().createMutationQuery("update Obs set status = :final where obsId = :id")
+		        .setParameter("final", Obs.Status.FINAL).setParameter("id", obs.getObsId()).executeUpdate();
+		sessionFactory.getCurrentSession().refresh(obs);
+	}
+
+	@Override
+	public boolean hasNewerVersion(Obs obs) {
+		return !sessionFactory.getCurrentSession()
+		        .createQuery("select o.obsId from Obs o where o.previousVersion = :obs", Integer.class)
+		        .setParameter("obs", obs).setMaxResults(1).list().isEmpty();
 	}
 
 	@Override

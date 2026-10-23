@@ -97,6 +97,16 @@ public interface ObsDAO {
 	public boolean isComplexDataCaptured(String valueComplex);
 
 	/**
+	 * Deletes the captures holding a complex obs's file, if nothing points to them, so the obs can be
+	 * purged.
+	 *
+	 * @param valueComplex a complex obs's value, naming its file
+	 * @return false if a capture holding the file is pointed to, and so was kept
+	 * @since 3.0.0
+	 */
+	public boolean releaseCaptures(String valueComplex);
+
+	/**
 	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicyByUuid(String)
 	 */
 	public ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid);
