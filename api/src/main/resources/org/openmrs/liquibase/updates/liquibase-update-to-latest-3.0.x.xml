@@ -811,8 +811,8 @@
 		<comment>
 			Gives each existing complex obs of an encounter that holds a PDF, an image, a recording, a video or plain
 			text a capture pointing at it; the obs and its file are left as they are, and backfilled captures never
-			expire and have no checksum. Rolling back deletes the backfilled captures, so it must come before anything
-			points at them
+			expire and have no checksum. Rolling back deletes the captures with no checksum, which only the backfill
+			makes, so it must come before anything points at them
 		</comment>
 		<customChange class="org.openmrs.util.databasechange.ComplexObsCaptureBackfillChangeSet"/>
 		<rollback>

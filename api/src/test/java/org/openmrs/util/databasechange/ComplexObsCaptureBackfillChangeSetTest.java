@@ -83,6 +83,7 @@ public class ComplexObsCaptureBackfillChangeSetTest extends BaseContextSensitive
 	public void mediaType_shouldReadTheFilesOwnExtensionBeforeTheTitles() {
 		assertEquals("application/pdf", ComplexObsCaptureBackfillChangeSet.mediaType("notes.txt|complex_obs/x-scan.pdf"));
 		assertEquals("audio/mpeg", ComplexObsCaptureBackfillChangeSet.mediaType("visit.mp3 file |complex_obs/abc"));
+		assertEquals("image/png", ComplexObsCaptureBackfillChangeSet.mediaType("wound.png image |complex_obs/abc"));
 		assertNull(ComplexObsCaptureBackfillChangeSet.mediaType("letter|letter.docx"));
 		assertNull(ComplexObsCaptureBackfillChangeSet.mediaType("no extension at all"));
 	}

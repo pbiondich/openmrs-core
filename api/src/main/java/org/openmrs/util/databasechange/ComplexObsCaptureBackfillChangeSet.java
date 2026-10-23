@@ -120,8 +120,8 @@ public class ComplexObsCaptureBackfillChangeSet implements CustomTaskChange {
 	static String mediaType(String valueComplex) {
 		String[] names = valueComplex.split("\\|");
 		for (int i = names.length - 1; i >= 0; i--) {
-			// BinaryDataHandler appends " file" to the title
-			String name = StringUtils.removeEnd(StringUtils.trim(names[i]), " file");
+			// BinaryDataHandler appends " file" to the title, and ImageHandler " image"
+			String name = StringUtils.removeEnd(StringUtils.removeEnd(StringUtils.trim(names[i]), " file"), " image");
 			String extension = FilenameUtils.getExtension(name).toLowerCase(Locale.ROOT);
 			if (MEDIA_TYPES.containsKey(extension)) {
 				return MEDIA_TYPES.get(extension);
