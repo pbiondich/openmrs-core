@@ -371,6 +371,9 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 		assertTrue(obs.getVoided());
 		assertEquals("Capture artifact expired", obs.getVoidReason());
 		assertEquals(Obs.Status.FINAL, obs.getStatus());
+		// and it can still be fetched, without its data, now its file is gone
+		Context.evictFromSession(obs);
+		assertTrue(Context.getObsService().getObsByUuid(obs.getUuid()).getVoided());
 	}
 
 	@Test
