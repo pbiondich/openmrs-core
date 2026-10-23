@@ -12,7 +12,10 @@ package org.openmrs.api.impl;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -20,11 +23,11 @@ import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.Concept;
@@ -41,9 +44,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.db.CaptureDAO;
 import org.openmrs.obs.ComplexData;
 import org.openmrs.obs.ComplexObsHandler;
-import org.openmrs.obs.handler.BinaryDataHandler;
-import org.openmrs.obs.handler.BinaryStreamHandler;
-import org.openmrs.obs.handler.MediaHandler;
+import org.openmrs.obs.handler.ImageHandler;
+import org.openmrs.obs.handler.TextHandler;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
@@ -82,8 +84,9 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	 */
 	@Override
 	public Capture createCapture(Capture capture, Concept concept, InputStream artifact) {
-		if (capture.getCaptureId() != null || capture.getEncounter() == null || capture.getKind() == null
-		        || artifact == null) {
+		// the uuid titles the artifact's obs, so it must be a uuid and nothing else
+		if (capture.getCaptureId() != null || capture.getEncounter() == null || capture.getEncounter().getVoided()
+		        || capture.getKind() == null || artifact == null || !isUuid(capture.getUuid())) {
 			throw new APIException("Capture.error.invalid", (Object[]) null);
 		}
 		if (capture.getConsentStatus() == null) {
@@ -96,7 +99,7 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 			throw new APIException("Capture.error.mimeType", new Object[] { capture.getMimeType(), capture.getKind() });
 		}
 		capture.setMimeType(mimeType);
-		checkConcept(concept);
+		ConceptComplex complex = complexConcept(concept);
 		if (capture.getDerivedFrom() != null) {
 			// judged as saved: of the same encounter and not voided
 			Capture source = saved(capture.getDerivedFrom());
@@ -112,35 +115,62 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		        : null);
 		capture.setArtifactDeletedAt(null);
 
-		// the artifact is a complex obs of the encounter, stored as received; it is titled with the
-		// capture's uuid, so nothing the caller names becomes part of a storage key
-		Encounter encounter = capture.getEncounter();
-		Obs obs = new Obs(encounter.getPatient(), concept, encounter.getEncounterDatetime(), encounter.getLocation());
-		obs.setEncounter(encounter);
-		MessageDigest sha256 = sha256();
-		// not closed here: the caller closes the artifact
-		InputStream in = new DigestInputStream(new LimitedInputStream(artifact, maxSizeMb() * 1024 * 1024), sha256);
-		obs.setComplexData(new ComplexData(capture.getUuid(), in));
+		Path spool = null;
 		try {
-			obs = Context.getObsService().saveObs(obs, null);
-		} catch (RuntimeException e) {
-			// the handlers and storage report the size limit wrapped in their own exceptions
-			if (ExceptionUtils.indexOfThrowable(e, TooLargeException.class) >= 0) {
+			// the artifact is read here, counted and checksummed, before storage sees it: storage copies on
+			// another thread and would take a stalled upload as a finished one
+			spool = Files.createTempFile("capture", null);
+			MessageDigest sha256 = sha256();
+			long size;
+			try (OutputStream out = Files.newOutputStream(spool)) {
+				size = new DigestInputStream(new LimitedInputStream(artifact, maxSizeMb() * 1024 * 1024), sha256)
+				        .transferTo(out);
+			} catch (TooLargeException e) {
 				throw new APIException("Capture.error.tooLarge", new Object[] { maxSizeMb() }, e);
 			}
-			throw e;
+
+			// the artifact is a complex obs of the encounter, stored as received, titled with the capture's uuid
+			Encounter encounter = capture.getEncounter();
+			Obs obs = new Obs(encounter.getPatient(), complex, encounter.getEncounterDatetime(), encounter.getLocation());
+			obs.setEncounter(encounter);
+			try (InputStream in = Files.newInputStream(spool)) {
+				obs.setComplexData(new ComplexData(capture.getUuid(), in));
+				obs = Context.getObsService().saveObs(obs, null);
+			}
+			String key = storageKey(obs);
+			purgeIfRolledBack(key);
+			Long stored = storageService.getMetadata(key).getLength();
+			if (stored != null && stored != size) {
+				throw new APIException("Capture.error.store", (Object[]) null);
+			}
+			// the artifact is evidence, not a claim: it is final whoever stored it, and only what is
+			// derived from it waits for attestation
+			if (obs.getStatus() != Obs.Status.FINAL) {
+				dao.finalizeArtifactObs(obs);
+			}
+			capture.setObs(obs);
+			capture.setSha256(HexFormat.of().formatHex(sha256.digest()));
+			return dao.saveCapture(capture);
+		} catch (IOException e) {
+			throw new APIException("Capture.error.store", (Object[]) null, e);
+		} finally {
+			if (spool != null) {
+				try {
+					Files.deleteIfExists(spool);
+				} catch (IOException e) {
+					log.warn("Could not delete the temporary copy {} of a capture artifact", spool, e);
+				}
+			}
 		}
-		purgeIfRolledBack(storageKey(obs));
-		capture.setObs(obs);
-		capture.setSha256(HexFormat.of().formatHex(sha256.digest()));
-		return dao.saveCapture(capture);
 	}
 
 	/**
 	 * A capture's artifact must be stored exactly as it was received, so its concept must be complex
 	 * with a handler that keeps the bytes; the image and text handlers re-encode them.
+	 *
+	 * @return the concept as saved, complex
 	 */
-	private void checkConcept(Concept concept) {
+	private ConceptComplex complexConcept(Concept concept) {
 		ConceptComplex complex = null;
 		if (concept != null && concept.getConceptId() != null) {
 			try {
@@ -151,9 +181,17 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 			}
 		}
 		ComplexObsHandler handler = complex == null ? null : Context.getObsService().getHandler(complex.getHandler());
-		if (!(handler instanceof BinaryDataHandler || handler instanceof BinaryStreamHandler
-		        || handler instanceof MediaHandler)) {
+		if (handler == null || handler instanceof ImageHandler || handler instanceof TextHandler) {
 			throw new APIException("Capture.error.concept", (Object[]) null);
+		}
+		return complex;
+	}
+
+	private static boolean isUuid(String uuid) {
+		try {
+			return uuid != null && UUID.fromString(uuid).toString().equalsIgnoreCase(uuid);
+		} catch (IllegalArgumentException e) {
+			return false;
 		}
 	}
 
@@ -187,7 +225,9 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		// the artifact's obs comes from the database, never from the object passed in; that obs may be
 		// voided by an edit, which keeps its file
 		Obs obs = capture.getVoided() ? null : dao.getReadableArtifactObs(capture.getCaptureId());
-		if (obs == null) {
+		// an obs voided by an edit keeps the file for its new version; one voided otherwise, say as on
+		// the wrong patient, is not served
+		if (obs == null || (obs.getVoided() && !dao.hasNewerVersion(obs))) {
 			throw new APIException("Capture.error.noArtifact", new Object[] { capture.getUuid() });
 		}
 		try {
@@ -341,7 +381,8 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		} catch (IOException | UncheckedIOException e) {
 			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() }, e);
 		}
-		dao.voidArtifactObs(capture.getObs().getObsId(),
+		// every live version of the obs shares the file, so each is voided, not just the capture's own
+		dao.voidArtifactObs(capture.getObs().getValueComplex(),
 		    capture.getConsentStatus() == Capture.ConsentStatus.WITHDRAWN ? "Capture consent withdrawn"
 		            : "Capture artifact expired",
 		    now);

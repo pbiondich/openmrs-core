@@ -51,12 +51,16 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> fail for an artifact over the size limit<br/>
 	 * <strong>Should</strong> delete the artifact if the transaction rolls back<br/>
 	 * <strong>Should</strong> take a capture derived from another of the same encounter<br/>
-	 * <strong>Should</strong> fail for a capture derived from one of another encounter or a voided one
+	 * <strong>Should</strong> fail for a capture derived from one of another encounter or a voided
+	 * one<br/>
+	 * <strong>Should</strong> fail for a uuid that is not a uuid<br/>
+	 * <strong>Should</strong> fail for a voided encounter<br/>
+	 * <strong>Should</strong> save the artifact's obs final whatever the finalization policy
 	 *
 	 * @param capture a new capture, with its encounter, kind and media type, and optionally whether the
 	 *            patient gave consent and the capture it was derived from
 	 * @param concept the complex concept the artifact is recorded under; its handler must store the
-	 *            bytes as received (BinaryDataHandler, BinaryStreamHandler or MediaHandler)
+	 *            bytes as received (not the image or text handler, which re-encode)
 	 * @param artifact the artifact's content, which the caller closes
 	 * @return the saved capture
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
@@ -91,7 +95,8 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> fail once the artifact is deleted<br/>
 	 * <strong>Should</strong> fail for a voided capture<br/>
 	 * <strong>Should</strong> read the artifact's obs from the database, not the object passed in<br/>
-	 * <strong>Should</strong> still read the artifact after its obs was edited
+	 * <strong>Should</strong> still read the artifact after its obs was edited<br/>
+	 * <strong>Should</strong> fail when the artifact's obs was voided other than by an edit
 	 *
 	 * @param capture a saved capture
 	 * @return its artifact's content, which the caller closes
@@ -138,7 +143,8 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> never delete a scanned form<br/>
 	 * <strong>Should</strong> not delete an artifact that has not expired<br/>
 	 * <strong>Should</strong> fail if storage still has the artifact after deleting it<br/>
-	 * <strong>Should</strong> void the artifact's obs, keeping its status
+	 * <strong>Should</strong> void the artifact's obs, keeping its status<br/>
+	 * <strong>Should</strong> void every live version of the artifact's obs
 	 *
 	 * @param capture a saved capture
 	 * @return true if the artifact was due and so deleted

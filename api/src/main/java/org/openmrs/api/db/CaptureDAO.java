@@ -45,9 +45,19 @@ public interface CaptureDAO {
 	Obs getReadableArtifactObs(Integer captureId);
 
 	/**
-	 * Voids the complex obs whose artifact was deleted, in the database, keeping its status.
+	 * Voids every live complex obs naming the artifact's file, keeping its status.
 	 */
-	void voidArtifactObs(Integer obsId, String reason, Date voidedAt);
+	void voidArtifactObs(String valueComplex, String reason, Date voidedAt);
+
+	/**
+	 * Makes a just saved artifact obs final, whatever the finalization policy made it.
+	 */
+	void finalizeArtifactObs(Obs obs);
+
+	/**
+	 * @return true if an edit replaced the obs with a newer version
+	 */
+	boolean hasNewerVersion(Obs obs);
 
 	/**
 	 * @param now the time to judge expiry by
