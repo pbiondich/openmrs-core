@@ -29,14 +29,16 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * Something an encounter was captured in, such as a scanned form or an audio recording, from which
- * obs are derived. The artifact itself is kept by the {@link org.openmrs.api.StorageService}, never
- * in the database; this row stays after the artifact is deleted, so obs keep saying where they came
- * from.
+ * obs are derived. The artifact itself is a complex obs, so it is part of the record like any other
+ * attachment and is never overwritten; the capture says what it is, whether the patient consented
+ * and how long it is kept. An intermediate form, such as the transcript of a recording, is a
+ * capture of its own, derived from the one it was made from. The row stays after the artifact is
+ * deleted, so obs keep saying where they came from.
  * <p>
- * Only {@link org.openmrs.api.CaptureService} sets a capture's storage key, checksum, expiry and
- * deletion, and once saved none of them, nor the consent, can be changed by saving the capture
- * again: the service changes consent and deletion in the database itself, and those bulk updates
- * record changed_by and date_changed but bypass Envers, so the audit tables do not show them.
+ * Only {@link org.openmrs.api.CaptureService} sets a capture's obs, checksum, expiry and deletion,
+ * and once saved none of them, nor the consent, can be changed by saving the capture again: the
+ * service changes consent and deletion in the database itself, and those bulk updates record
+ * changed_by and date_changed but bypass Envers, so the audit tables do not show them.
  *
  * @since 3.0.0
  */
@@ -88,13 +90,18 @@ public class Capture extends BaseOpenmrsData {
 	@Column(name = "kind", length = 50, nullable = false, updatable = false)
 	private Kind kind;
 
-	@Column(name = "artifact_key", length = 1024, nullable = false, updatable = false)
-	private String artifactKey;
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "obs_id", updatable = false)
+	private Obs obs;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "derived_from_capture_id", updatable = false)
+	private Capture derivedFrom;
 
 	@Column(name = "mime_type", length = 255, nullable = false, updatable = false)
 	private String mimeType;
 
-	@Column(name = "sha256", length = 64, nullable = false, updatable = false)
+	@Column(name = "sha256", length = 64, updatable = false)
 	private String sha256;
 
 	@Enumerated(EnumType.STRING)
@@ -157,14 +164,26 @@ public class Capture extends BaseOpenmrsData {
 	}
 
 	/**
-	 * @return the artifact's key in the {@link org.openmrs.api.StorageService}; the service sets this
+	 * @return the complex obs holding the artifact; the service sets this
 	 */
-	public String getArtifactKey() {
-		return artifactKey;
+	public Obs getObs() {
+		return obs;
 	}
 
-	public void setArtifactKey(String artifactKey) {
-		this.artifactKey = artifactKey;
+	public void setObs(Obs obs) {
+		this.obs = obs;
+	}
+
+	/**
+	 * @return the capture this one was made from, such as the recording a transcript was made from;
+	 *         null for a raw capture
+	 */
+	public Capture getDerivedFrom() {
+		return derivedFrom;
+	}
+
+	public void setDerivedFrom(Capture derivedFrom) {
+		this.derivedFrom = derivedFrom;
 	}
 
 	public String getMimeType() {
@@ -176,7 +195,8 @@ public class Capture extends BaseOpenmrsData {
 	}
 
 	/**
-	 * @return the artifact's SHA-256, in lower case hex; the service sets this
+	 * @return the artifact's SHA-256, in lower case hex, as it was received; the service sets this, and
+	 *         it is null for a capture backfilled from an existing complex obs
 	 */
 	public String getSha256() {
 		return sha256;

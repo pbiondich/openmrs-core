@@ -84,16 +84,21 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   would only restate while making every encounter row change. `ConceptService` gets versions by uuid, by label and the
   current one, and saves and retires them under the concept privileges.
 - `capture` (`Capture`, data: encounter, kind `AUDIO` | `VIDEO` | `HANDWRITTEN` | `SCANNED_FORM` | `TYPED_TEXT` |
-  `IMAGE`, artifact_key, mime_type, sha256, consent_status `NOT_RECORDED` | `GIVEN` | `WITHDRAWN`, expires_at,
-  artifact_deleted_at). `CaptureService.createCapture` stores the artifact with core's `StorageService` (group
-  `captures`), never in the database; storage picks the key, so nothing a caller sends becomes part of a path, and a
-  rolled back save deletes what it stored. Each kind allows only its own media types (audio, video, images, PDF, plain
-  text; never HTML or SVG), artifacts are capped at `capture.max_size_mb` (default 100) and checksummed with SHA-256.
-  Audio and video expire after `capture.retention_days` (default 90); every other kind is kept, and a null expires_at
-  means kept. Once saved, the key, checksum, expiry, consent and deletion columns are read-only in the mapping; the
-  service changes consent and deletion with bulk updates, going by what is in the database (Envers does not see those),
-  and `voidCapture` refuses an unsaved capture. A daily `CaptureRetentionTaskHandler` on the new scheduler deletes
-  expired artifacts, each in its own transaction so one failure does not stop the rest; a delete only counts once
-  storage no longer has the artifact, and only keys under `captures/` are ever deleted. Withdrawing consent deletes an
-  expiring one at once; scanned forms and other kept artifacts are never deleted, the row
-  always stays, and voided captures are not served. Privileges `Get Captures`, `Add Captures` and `Edit Captures`.
+  `IMAGE`, obs_id, derived_from_capture_id, mime_type, sha256, consent_status `NOT_RECORDED` | `GIVEN` | `WITHDRAWN`,
+  expires_at, artifact_deleted_at). Every capture sits on a complex obs of its encounter, which holds the artifact as
+  received and is never overwritten (decided with Paul): `CaptureService.createCapture` takes a complex concept whose
+  handler stores bytes as received (BinaryDataHandler, BinaryStreamHandler or MediaHandler; the image and text handlers
+  re-encode), saves the obs titled with the capture's uuid, and deletes the stored file if the transaction rolls back.
+  An intermediate form, such as a transcript, is a capture derived from another of the same encounter. Each kind
+  allows only its own media types (audio, video, images, PDF, plain text; never HTML or SVG), artifacts are capped at
+  `capture.max_size_mb` (default 100) and checksummed with SHA-256 as received. Audio and video expire after
+  `capture.retention_days` (default 90); every other kind is kept, and a null expires_at means kept. Once saved, the
+  obs, checksum, expiry, consent and deletion columns are read-only in the mapping; the service changes consent and
+  deletion with bulk updates, going by what is in the database (Envers does not see those), and `voidCapture` refuses
+  an unsaved capture. A daily `CaptureRetentionTaskHandler` deletes expired artifacts, each in its own transaction:
+  the file is deleted, the complex obs voided with its status kept (it was not entered in error), and the capture
+  marked; a delete only counts once storage no longer has the file. Withdrawing consent deletes an expiring artifact
+  at once; scanned forms and other kept artifacts are never deleted, the row always stays, and voided captures are
+  not served. `ObsService` no longer deletes a complex obs's file on edit when the new version kept it or a capture
+  holds it, and refuses to purge such an obs. Privileges `Get Captures`, `Add Captures` and `Edit Captures`; creating
+  a capture also needs Add Observations.

@@ -16,6 +16,7 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.openmrs.Concept;
 import org.openmrs.ConceptClass;
@@ -156,8 +157,12 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 			// the fact that the obs is now voided
 			evictObsAndChildren(obs);
 			obs = Context.getObsService().getObs(obs.getObsId());
-			//delete the previous file from the appdata/complex_obs folder
-			if (newObs.hasPreviousVersion() && newObs.getPreviousVersion().isComplex()) {
+			// delete the previous file from the appdata/complex_obs folder, unless the new version kept it or
+			// a capture holds it
+			Obs previous = newObs.getPreviousVersion();
+			if (newObs.hasPreviousVersion() && previous.isComplex()
+			        && !Objects.equals(previous.getValueComplex(), newObs.getValueComplex())
+			        && !dao.isComplexDataCaptured(previous.getValueComplex())) {
 				ComplexObsHandler handler = getHandler(newObs.getPreviousVersion());
 				handler.purgeComplexData(newObs.getPreviousVersion());
 			}
@@ -480,6 +485,10 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 */
 	@Override
 	public void purgeObs(Obs obs, boolean cascade) throws APIException {
+		// a capture's artifact is part of the record: its obs, and any version sharing its file, stay
+		if (obs != null && obs.isComplex() && dao.isComplexDataCaptured(obs.getValueComplex())) {
+			throw new APIException("Obs.error.captured", new Object[] { obs.getUuid() });
+		}
 		if (!purgeComplexData(obs)) {
 			// Log a warning instead of throwing an error.
 			// This allows purging the obs row even if the associated file is missing,

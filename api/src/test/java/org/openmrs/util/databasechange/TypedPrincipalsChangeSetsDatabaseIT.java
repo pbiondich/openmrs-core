@@ -66,7 +66,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertEquals("REQUIRE_ATTESTATION", getFinalizationAction(connection, "SOFTWARE"));
 			assertTrue(hasColumn(connection, "obs_attestation_item", "outcome"));
 			assertTrue(hasColumn(connection, "encounter", "dictionary_version_id"));
-			assertTrue(hasColumn(connection, "capture", "artifact_key"));
+			assertTrue(hasColumn(connection, "capture", "obs_id"));
 		}
 
 		// the assertion model changesets are the last ones in the latest update file
@@ -86,7 +86,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "obs_attestation", "attester_id"));
 			assertFalse(hasColumn(connection, "encounter", "dictionary_version_id"));
 			assertFalse(hasColumn(connection, "dictionary_version", "label"));
-			assertFalse(hasColumn(connection, "capture", "artifact_key"));
+			assertFalse(hasColumn(connection, "capture", "obs_id"));
 			assertFalse(isPersonIdNullable(connection));
 			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}

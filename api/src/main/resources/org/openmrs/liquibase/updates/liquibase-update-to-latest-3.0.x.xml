@@ -630,9 +630,10 @@
 			</not>
 		</preConditions>
 		<comment>
-			What an encounter was captured in, such as a scanned form or an audio recording. The artifact is kept by
-			the storage service, never in the database; the row stays after the artifact is deleted. A null
-			expires_at means the artifact is kept for good
+			What an encounter was captured in, such as a scanned form or an audio recording. The artifact is the
+			complex obs obs_id; an intermediate form, such as a transcript, names the capture it was derived from. The
+			row stays after the artifact is deleted. A null expires_at means the artifact is kept for good, and a null
+			sha256 a capture backfilled from an existing complex obs
 		</comment>
 		<createTable tableName="capture">
 			<column name="capture_id" autoIncrement="true" type="INT">
@@ -644,15 +645,14 @@
 			<column name="kind" type="VARCHAR(50)">
 				<constraints nullable="false"/>
 			</column>
-			<column name="artifact_key" type="VARCHAR(1024)">
-				<constraints nullable="false"/>
+			<column name="obs_id" type="INT">
+				<constraints nullable="false" unique="true" uniqueConstraintName="capture_obs"/>
 			</column>
+			<column name="derived_from_capture_id" type="INT"/>
 			<column name="mime_type" type="VARCHAR(255)">
 				<constraints nullable="false"/>
 			</column>
-			<column name="sha256" type="VARCHAR(64)">
-				<constraints nullable="false"/>
-			</column>
+			<column name="sha256" type="VARCHAR(64)"/>
 			<column name="consent_status" type="VARCHAR(50)" defaultValue="NOT_RECORDED">
 				<constraints nullable="false"/>
 			</column>
@@ -679,6 +679,10 @@
 		<createIndex tableName="capture" indexName="capture_encounter_idx">
 			<column name="encounter_id"/>
 		</createIndex>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="obs_id" constraintName="capture_obs_fk"
+			referencedTableName="obs" referencedColumnNames="obs_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="derived_from_capture_id"
+			constraintName="capture_derived_from" referencedTableName="capture" referencedColumnNames="capture_id"/>
 		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="encounter_id" constraintName="capture_encounter"
 			referencedTableName="encounter" referencedColumnNames="encounter_id"/>
 		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="creator" constraintName="capture_creator"

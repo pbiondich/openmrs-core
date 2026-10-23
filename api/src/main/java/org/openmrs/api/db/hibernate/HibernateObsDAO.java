@@ -530,6 +530,17 @@ public class HibernateObsDAO implements ObsDAO {
 	}
 
 	/**
+	 * @see org.openmrs.api.db.ObsDAO#isComplexDataCaptured(String)
+	 */
+	@Override
+	public boolean isComplexDataCaptured(String valueComplex) {
+		// an edit copies the value to the new version, so the file is held by every version of the obs
+		return valueComplex != null && !sessionFactory.getCurrentSession()
+		        .createQuery("select c.captureId from Capture c where c.obs.valueComplex = :value", Integer.class)
+		        .setParameter("value", valueComplex).setMaxResults(1).list().isEmpty();
+	}
+
+	/**
 	 * @see org.openmrs.api.db.ObsDAO#getObsFinalizationPolicyByUuid(String)
 	 */
 	@Override

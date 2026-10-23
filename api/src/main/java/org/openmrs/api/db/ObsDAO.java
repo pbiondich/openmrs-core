@@ -90,6 +90,13 @@ public interface ObsDAO {
 	public boolean hasNewerVersion(Obs obs);
 
 	/**
+	 * @param valueComplex a complex obs's value, naming its file
+	 * @return true if a capture holds that file through some obs, so the file must not be deleted
+	 * @since 3.0.0
+	 */
+	public boolean isComplexDataCaptured(String valueComplex);
+
+	/**
 	 * @see org.openmrs.api.ObsService#getObsFinalizationPolicyByUuid(String)
 	 */
 	public ObsFinalizationPolicy getObsFinalizationPolicyByUuid(String uuid);
