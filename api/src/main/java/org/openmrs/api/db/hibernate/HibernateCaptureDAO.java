@@ -84,6 +84,11 @@ public class HibernateCaptureDAO implements CaptureDAO {
 		                + " voidReason = :reason where obsId = :id and voided = false")
 		        .setParameter("user", Context.getAuthenticatedUser()).setParameter("voidedAt", voidedAt)
 		        .setParameter("reason", reason).setParameter("id", obsId).executeUpdate();
+		// the session may hold the obs as it was before the update
+		Obs obs = sessionFactory.getCurrentSession().get(Obs.class, obsId);
+		if (obs != null) {
+			sessionFactory.getCurrentSession().refresh(obs);
+		}
 	}
 
 	@Override

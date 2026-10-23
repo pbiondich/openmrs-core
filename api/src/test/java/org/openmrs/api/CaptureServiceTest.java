@@ -364,15 +364,14 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	public void deleteExpiredArtifact_shouldVoidTheArtifactsObsKeepingItsStatus() {
 		Capture expired = expire(create(Kind.AUDIO, "audio/mpeg"));
 
-		captureService.deleteExpiredArtifact(expired);
 		Obs obs = expired.getObs();
-		Context.refreshEntity(obs);
+		obs.getValueComplex();
+		captureService.deleteExpiredArtifact(expired);
 
 		assertTrue(obs.getVoided());
 		assertEquals("Capture artifact expired", obs.getVoidReason());
 		assertEquals(Obs.Status.FINAL, obs.getStatus());
 		// and it can still be fetched, without its data, now its file is gone
-		Context.evictFromSession(obs);
 		assertTrue(Context.getObsService().getObsByUuid(obs.getUuid()).getVoided());
 	}
 
