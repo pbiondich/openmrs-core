@@ -23,10 +23,13 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.Concept;
+import org.openmrs.Derivation;
+import org.openmrs.DictionaryVersion;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Obs;
 import org.openmrs.ObsFinalizationPolicy;
+import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.CaptureServiceImpl;
@@ -310,6 +313,14 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 	}
 
 	@Test
+	public void purgeObs_shouldRefuseAnObsWhoseCaptureADerivationIsOver() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+		captureService.createDerivation(derivation(capture));
+
+		assertThrows(APIException.class, () -> Context.getObsService().purgeObs(capture.getObs()));
+	}
+
+	@Test
 	public void createCapture_shouldFailForAUuidThatIsNotAUuid() {
 		Capture capture = new Capture(encounter, Kind.SCANNED_FORM, "application/pdf");
 		capture.setUuid("x|openmrs-runtime.properties");
@@ -496,6 +507,134 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 
 	private CaptureServiceImpl unproxied() {
 		return (CaptureServiceImpl) AopTestUtils.getUltimateTargetObject(captureService);
+	}
+
+	@Test
+	public void createDerivation_shouldDefaultTheAgentAndDictionaryVersion() {
+		DictionaryVersion current = new DictionaryVersion();
+		current.setLabel("CIEL 2026-09");
+		current.setInUseFrom(new Date(System.currentTimeMillis() - 1000));
+		Context.getConceptService().saveDictionaryVersion(current);
+
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertEquals(Context.getAuthenticatedUser(), derivation.getAgent());
+		assertEquals(current, derivation.getDictionaryVersion());
+		assertEquals(derivation, captureService.getDerivationsByCapture(derivation.getCapture()).get(0));
+	}
+
+	@Test
+	public void createDerivation_shouldTakeASoftwareAgentOtherThanTheCaller() {
+		User daemon = Context.getUserService().getUserByUuid("A4F30A1B-5EB9-11DF-A648-37A07F9C90FB");
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setAgent(daemon);
+
+		assertEquals(daemon, captureService.createDerivation(derivation).getAgent());
+	}
+
+	@Test
+	public void createDerivation_shouldFailForAnotherPersonNamedAsTheAgent() {
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setAgent(Context.getUserService().getUser(501));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
+	}
+
+	@Test
+	public void createDerivation_shouldFailForARunThatFinishedBeforeItStarted() {
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setFinished(new Date(derivation.getStarted().getTime() - 1));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
+	}
+
+	@Test
+	public void createDerivation_shouldFailForAVoidedCapture() {
+		Capture capture = captureService.voidCapture(create(Kind.SCANNED_FORM, "application/pdf"), "wrong patient");
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation(capture)));
+	}
+
+	@Test
+	public void voidDerivation_shouldFailForADerivationThatIsNotSaved() {
+		assertThrows(APIException.class,
+		    () -> captureService.voidDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")), "x"));
+	}
+
+	@Test
+	public void createDerivation_shouldJudgeTheCaptureAsSavedNotAsPassedIn() {
+		Capture voided = captureService.voidCapture(create(Kind.SCANNED_FORM, "application/pdf"), "wrong patient");
+		Context.flushSession();
+		Context.evictFromSession(voided);
+		Capture stale = new Capture();
+		stale.setCaptureId(voided.getCaptureId());
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation(stale)));
+	}
+
+	@Test
+	public void getDerivationByUuid_shouldGetADerivationByItsUuid() {
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertEquals(derivation, captureService.getDerivationByUuid(derivation.getUuid()));
+	}
+
+	@Test
+	public void transferEncounter_shouldMoveObsTakenFromACaptureWithoutTheirCapture() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+		Obs obs = new Obs(encounter.getPatient(), Context.getConceptService().getConcept(5089), new Date(), null);
+		obs.setEncounter(encounter);
+		obs.setValueNumeric(50.0);
+		obs.setCapture(capture);
+		obs.setSpan("xywh=412,880,60,24;field=weight");
+		obs.setDerivation(captureService.createDerivation(derivation(capture)));
+		encounter.addObs(obs);
+		Context.getObsService().saveObs(obs, null);
+
+		Encounter moved = Context.getEncounterService().transferEncounter(encounter,
+		    Context.getPatientService().getPatient(2));
+
+		Obs copy = moved.getAllObs().stream().filter(o -> Double.valueOf(50.0).equals(o.getValueNumeric())).findFirst()
+		        .orElseThrow();
+		assertNull(copy.getCapture());
+		assertNull(copy.getSpan());
+		assertNull(copy.getDerivation());
+		assertEquals(capture, Context.getObsService().getObsByUuid(obs.getUuid()).getCapture());
+	}
+
+	@Test
+	public void createDerivation_shouldFailForADerivationThatIsAlreadySaved() {
+		Derivation derivation = captureService.createDerivation(derivation(create(Kind.SCANNED_FORM, "application/pdf")));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
+	}
+
+	@Test
+	public void saveObs_shouldKeepTheCaptureSpanAndDerivationAcrossAnEdit() {
+		Capture capture = create(Kind.SCANNED_FORM, "application/pdf");
+		Derivation derivation = captureService.createDerivation(derivation(capture));
+		ObsService obsService = Context.getObsService();
+		Obs obs = new Obs(encounter.getPatient(), Context.getConceptService().getConcept(5089), new Date(), null);
+		obs.setEncounter(encounter);
+		obs.setValueNumeric(50.0);
+		obs.setCapture(capture);
+		obs.setSpan("xywh=412,880,60,24;field=weight");
+		obs.setDerivation(derivation);
+		obs = obsService.saveObs(obs, null);
+
+		obs.setValueNumeric(51.0);
+		Obs edited = obsService.saveObs(obs, "misread");
+
+		assertEquals(capture, edited.getCapture());
+		assertEquals("xywh=412,880,60,24;field=weight", edited.getSpan());
+		assertEquals(derivation, edited.getDerivation());
+	}
+
+	private Derivation derivation(Capture capture) {
+		Date started = new Date(System.currentTimeMillis() - 5000);
+		Derivation derivation = new Derivation(capture, started, new Date());
+		derivation.setParamsHash("sha256:" + "a".repeat(64));
+		return derivation;
 	}
 
 	private Capture create(Kind kind, String mimeType) {

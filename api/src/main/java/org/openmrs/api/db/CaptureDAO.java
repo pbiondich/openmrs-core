@@ -13,6 +13,7 @@ import java.util.Date;
 import java.util.List;
 
 import org.openmrs.Capture;
+import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
 
@@ -74,4 +75,10 @@ public interface CaptureDAO {
 	 * Records the artifact as deleted, in the database, unless it already is.
 	 */
 	void markArtifactDeleted(Integer captureId, Date deletedAt);
+
+	Derivation saveDerivation(Derivation derivation);
+
+	Derivation getDerivationByUuid(String uuid);
+
+	List<Derivation> getDerivationsByCapture(Capture capture);
 }

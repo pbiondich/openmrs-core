@@ -101,6 +101,12 @@
 		<!-- the provider who made the claim; null means unknown -->
 		<many-to-one name="asserter" class="Provider" column="asserter_id" />
 
+		<many-to-one name="capture" class="Capture" column="capture_id" />
+
+		<property name="span" type="java.lang.String" column="span" length="255" />
+
+		<many-to-one name="derivation" class="Derivation" column="derivation_id" />
+
 		<one-to-one name="referenceRange" class="org.openmrs.ObsReferenceRange" cascade="all"  />
 	</class>
 	

@@ -888,10 +888,26 @@ public class Encounter extends BaseChangeableOpenmrsData {
 			Obs obsCopy = Obs.newInstance(obs);
 			obsCopy.setEncounter(target);
 			obsCopy.setPerson(patient);
+			dropCapture(obsCopy);
 			target.addObs(obsCopy);
 		}
 
 		return target;
+	}
+
+	/**
+	 * A capture stays with the encounter it was captured in, so a copy for another patient cannot point
+	 * to it; the voided original keeps its capture, span and derivation.
+	 */
+	private static void dropCapture(Obs obs) {
+		obs.setCapture(null);
+		obs.setSpan(null);
+		obs.setDerivation(null);
+		if (obs.hasGroupMembers(true)) {
+			for (Obs member : obs.getGroupMembers(true)) {
+				dropCapture(member);
+			}
+		}
 	}
 
 	/**

@@ -14,14 +14,16 @@ import java.util.List;
 
 import org.openmrs.Capture;
 import org.openmrs.Concept;
+import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
- * Captures: the scanned forms, recordings and other artifacts encounters are captured in. Each
- * artifact is a complex obs of its encounter, stored as received and never overwritten; the capture
- * records what it is, the consent and how long it is kept. Audio and video expire after
+ * Captures: the scanned forms, recordings and other artifacts encounters are captured in, and the
+ * derivations, runs of an agent such as an extraction model, that took obs from them. Each artifact
+ * is a complex obs of its encounter, stored as received and never overwritten; the capture records
+ * what it is, the consent and how long it is kept. Audio and video expire after
  * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS} days, and every
  * other kind is kept; an expired artifact's file is deleted and its obs voided, and the capture
  * always stays. An intermediate form, such as a transcript, is a capture derived from another.
@@ -166,4 +168,57 @@ public interface CaptureService extends OpenmrsService {
 	 */
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.EDIT_CAPTURES + "')")
 	Capture voidCapture(Capture capture, String reason);
+
+	/**
+	 * Records an agent's finished run over a capture. The agent defaults to the authenticated user, and
+	 * the dictionary version to the current one. Another user may be named as the agent only if it is
+	 * software or a device, so a run is never pinned on a person who did not record it.
+	 * <p>
+	 * <strong>Should</strong> default the agent and dictionary version<br/>
+	 * <strong>Should</strong> take a software agent other than the caller<br/>
+	 * <strong>Should</strong> fail for another person named as the agent<br/>
+	 * <strong>Should</strong> fail for a run that finished before it started<br/>
+	 * <strong>Should</strong> fail for a voided capture<br/>
+	 * <strong>Should</strong> judge the capture as saved, not as passed in<br/>
+	 * <strong>Should</strong> fail for a derivation that is already saved
+	 *
+	 * @param derivation a new derivation, with its capture and when it started and finished
+	 * @return the saved derivation
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.ADD_DERIVATIONS + "')")
+	Derivation createDerivation(Derivation derivation);
+
+	/**
+	 * <strong>Should</strong> get a derivation by its uuid
+	 *
+	 * @param uuid the uuid of a derivation
+	 * @return the derivation, or null if there is none with that uuid
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CAPTURES + "')")
+	Derivation getDerivationByUuid(String uuid);
+
+	/**
+	 * @param capture a capture
+	 * @return the derivations over it that are not voided, in the order they were recorded
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.GET_CAPTURES + "')")
+	List<Derivation> getDerivationsByCapture(Capture capture);
+
+	/**
+	 * <strong>Should</strong> fail for a derivation that is not saved
+	 *
+	 * @param derivation the derivation to void
+	 * @param reason why it is voided
+	 * @return the voided derivation
+	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
+	 *             permission
+	 */
+	@PreAuthorize("hasAuthority('" + PrivilegeConstants.EDIT_CAPTURES + "')")
+	Derivation voidDerivation(Derivation derivation, String reason);
 }

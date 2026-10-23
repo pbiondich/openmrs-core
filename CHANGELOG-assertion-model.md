@@ -107,3 +107,19 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   voided complex obs whose file is gone is fetched without its data rather than failing (any other failure still
   fails). Privileges `Get Captures`, `Add Captures` and `Edit Captures`; creating a capture also needs Add
   Observations.
+- `derivation` (`Derivation`, data: capture, agent_user_id, dictionary_version_id, started, finished, params_hash):
+  one finished run of an agent, such as an extraction model, over a capture. `CaptureService.createDerivation` defaults
+  the agent to the authenticated user and the dictionary version to the current one, takes another user as agent only
+  if it is software or a device (never another person), needs the run to have finished
+  no earlier than it started, and refuses a voided capture; every column is read-only once saved. Privilege
+  `Add Derivations`; reading needs `Get Captures`.
+- `obs.capture_id`, `obs.span` (VARCHAR(255)) and `obs.derivation_id`: where an obs was taken from. The span is a
+  varchar grammar: a locator `t=<seconds>-<seconds>` (audio, video), `xywh=<x>,<y>,<w>,<h>` (pages and images) or
+  `c=<from>-<to>` (typed text), and/or `;`-separated `name=value` parameters such as `field=chest_indrawing`.
+  Region units are image pixels, or points on a PDF page; `c=` counts Unicode code points; `page=` is reserved for
+  the page of a multi-page capture; values are letters, digits and `_ . : -` only. `ObsValidator` checks that a span
+  has a capture, follows the grammar and fits the capture's kind, that the capture is of the obs's own encounter and
+  patient, that a derivation is over the same capture, and that a new obs points to no voided capture or derivation.
+  An edited obs keeps all three; `transferEncounter`'s copies drop them, since the capture stays with the encounter it
+  was captured in, and the voided originals keep them. Adding the two foreign keys rebuilds `obs` on MySQL, as the
+  asserter changeset already does.

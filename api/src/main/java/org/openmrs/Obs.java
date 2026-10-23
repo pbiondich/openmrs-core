@@ -177,6 +177,12 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 
 	private Provider asserter;
 
+	private Capture capture;
+
+	private String span;
+
+	private Derivation derivation;
+
 	private Status status = Status.FINAL;
 
 	private ObsReferenceRange referenceRange;
@@ -240,6 +246,9 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 		newObs.setStatus(obsToCopy.getStatus());
 		newObs.setInterpretation(obsToCopy.getInterpretation());
 		newObs.setAsserter(obsToCopy.getAsserter());
+		newObs.setCapture(obsToCopy.getCapture());
+		newObs.setSpan(obsToCopy.getSpan());
+		newObs.setDerivation(obsToCopy.getDerivation());
 		newObs.setOrder(obsToCopy.getOrder());
 
 		newObs.setValueComplex(obsToCopy.getValueComplex());
@@ -1313,6 +1322,61 @@ public class Obs extends BaseFormRecordableOpenmrsData {
 	public void setAsserter(Provider asserter) {
 		markAsDirty(this.asserter, asserter);
 		this.asserter = asserter;
+	}
+
+	/**
+	 * @return the capture, such as a scanned form or a recording, this obs was taken from; null if it
+	 *         was not taken from one
+	 * @since 3.0.0
+	 */
+	public Capture getCapture() {
+		return capture;
+	}
+
+	/**
+	 * @param capture the capture this obs was taken from
+	 * @since 3.0.0
+	 */
+	public void setCapture(Capture capture) {
+		markAsDirty(this.capture, capture);
+		this.capture = capture;
+	}
+
+	/**
+	 * @return where in its capture this obs was taken from, such as <code>t=42.0-58.0</code> in a
+	 *         recording, <code>xywh=412,880,60,24;field=chest_indrawing</code> on a page or
+	 *         <code>c=120-184</code> in text; null for the whole capture
+	 * @see org.openmrs.validator.ObsValidator for the grammar and its units
+	 * @since 3.0.0
+	 */
+	public String getSpan() {
+		return span;
+	}
+
+	/**
+	 * @param span where in its capture this obs was taken from
+	 * @since 3.0.0
+	 */
+	public void setSpan(String span) {
+		markAsDirty(this.span, span);
+		this.span = span;
+	}
+
+	/**
+	 * @return the agent's run over the capture that produced this obs; null if no recorded run did
+	 * @since 3.0.0
+	 */
+	public Derivation getDerivation() {
+		return derivation;
+	}
+
+	/**
+	 * @param derivation the agent's run that produced this obs
+	 * @since 3.0.0
+	 */
+	public void setDerivation(Derivation derivation) {
+		markAsDirty(this.derivation, derivation);
+		this.derivation = derivation;
 	}
 
 	/**

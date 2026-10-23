@@ -288,6 +288,12 @@ public class PrivilegeConstants {
 	/**
 	 * @since 3.0.0
 	 */
+	@AddOnStartup(description = "Able to record an agent's run over a capture, such as an extraction model's")
+	public static final String ADD_DERIVATIONS = "Add Derivations";
+
+	/**
+	 * @since 3.0.0
+	 */
 	@AddOnStartup(description = "Able to get the policies that say which agents' observations need attestation")
 	public static final String GET_OBS_FINALIZATION_POLICIES = "Get Obs Finalization Policies";
 

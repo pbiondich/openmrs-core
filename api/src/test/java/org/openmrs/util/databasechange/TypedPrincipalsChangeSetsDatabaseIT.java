@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 
-	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 17;
+	private static final int ASSERTION_MODEL_CHANGE_SET_COUNT = 19;
 
 	@Test
 	public void shouldTypeExistingUsersAndRollBackCleanly() throws Exception {
@@ -67,6 +67,8 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertTrue(hasColumn(connection, "obs_attestation_item", "outcome"));
 			assertTrue(hasColumn(connection, "encounter", "dictionary_version_id"));
 			assertTrue(hasColumn(connection, "capture", "obs_id"));
+			assertTrue(hasColumn(connection, "derivation", "agent_user_id"));
+			assertTrue(hasColumn(connection, "obs", "span"));
 		}
 
 		// the assertion model changesets are the last ones in the latest update file
@@ -87,6 +89,10 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "encounter", "dictionary_version_id"));
 			assertFalse(hasColumn(connection, "dictionary_version", "label"));
 			assertFalse(hasColumn(connection, "capture", "obs_id"));
+			assertFalse(hasColumn(connection, "derivation", "agent_user_id"));
+			assertFalse(hasColumn(connection, "obs", "capture_id"));
+			assertFalse(hasColumn(connection, "obs", "span"));
+			assertFalse(hasColumn(connection, "obs", "derivation_id"));
 			assertFalse(isPersonIdNullable(connection));
 			assertEquals(Integer.valueOf(1), getPersonId(connection, "daemon"));
 		}

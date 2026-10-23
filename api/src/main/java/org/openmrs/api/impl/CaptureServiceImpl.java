@@ -32,8 +32,11 @@ import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.Concept;
 import org.openmrs.ConceptComplex;
+import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.APIException;
 import org.openmrs.api.CaptureService;
 import org.openmrs.api.StorageService;
@@ -275,6 +278,80 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 			throw new APIException("Capture.error.notSaved", (Object[]) null);
 		}
 		return dao.saveCapture(capture);
+	}
+
+	/**
+	 * @see CaptureService#createDerivation(Derivation)
+	 */
+	@Override
+	public Derivation createDerivation(Derivation derivation) {
+		if (derivation.getDerivationId() != null || derivation.getCapture() == null || derivation.getStarted() == null
+		        || derivation.getFinished() == null || derivation.getFinished().before(derivation.getStarted())
+		        || (derivation.getParamsHash() != null && derivation.getParamsHash().length() > 255)) {
+			throw new APIException("Derivation.error.invalid", (Object[]) null);
+		}
+		// whether the capture is voided goes by the database, not the object passed in
+		derivation.setCapture(saved(derivation.getCapture()));
+		if (derivation.getCapture().getVoided()) {
+			throw new APIException("Derivation.error.captureVoided", new Object[] { derivation.getCapture().getUuid() });
+		}
+		User caller = Context.getAuthenticatedUser();
+		if (derivation.getAgent() == null) {
+			derivation.setAgent(caller);
+		} else if (caller == null || !caller.getUserId().equals(derivation.getAgent().getUserId())) {
+			// a run may be recorded for a software or device agent, never pinned on another person; the
+			// agent's type is read as saved, since a type cannot change
+			User agent;
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
+				agent = derivation.getAgent().getUserId() == null ? null
+				        : Context.getUserService().getUser(derivation.getAgent().getUserId());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_USERS);
+			}
+			if (agent == null || agent.getUserType() == UserType.HUMAN) {
+				throw new APIException("Derivation.error.agent", (Object[]) null);
+			}
+			derivation.setAgent(agent);
+		}
+		if (derivation.getDictionaryVersion() == null) {
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+				derivation.setDictionaryVersion(Context.getConceptService().getCurrentDictionaryVersion());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+			}
+		}
+		return dao.saveDerivation(derivation);
+	}
+
+	/**
+	 * @see CaptureService#getDerivationByUuid(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public Derivation getDerivationByUuid(String uuid) {
+		return dao.getDerivationByUuid(uuid);
+	}
+
+	/**
+	 * @see CaptureService#getDerivationsByCapture(Capture)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<Derivation> getDerivationsByCapture(Capture capture) {
+		return dao.getDerivationsByCapture(capture);
+	}
+
+	/**
+	 * @see CaptureService#voidDerivation(Derivation, String)
+	 */
+	@Override
+	public Derivation voidDerivation(Derivation derivation, String reason) {
+		if (derivation.getDerivationId() == null) {
+			throw new APIException("Derivation.error.notSaved", (Object[]) null);
+		}
+		return dao.saveDerivation(derivation);
 	}
 
 	/**

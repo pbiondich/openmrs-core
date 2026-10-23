@@ -547,10 +547,18 @@ public class HibernateObsDAO implements ObsDAO {
 	@Override
 	public boolean releaseCaptures(String valueComplex) {
 		Session session = sessionFactory.getCurrentSession();
-		if (valueComplex == null
-		        || !session.createQuery("select c.captureId from Capture c where c.derivedFrom.obs.valueComplex = :value",
-		            Integer.class).setParameter("value", valueComplex).setMaxResults(1).list().isEmpty()) {
-			return valueComplex == null;
+		if (valueComplex == null) {
+			return true;
+		}
+		// pointed to by a capture derived from it, a derivation over it, or an obs taken from it
+		for (String pointer : new String[] {
+		        "select c.captureId from Capture c where c.derivedFrom.obs.valueComplex = :value",
+		        "select d.derivationId from Derivation d where d.capture.obs.valueComplex = :value",
+		        "select o.obsId from Obs o where o.capture.obs.valueComplex = :value" }) {
+			if (!session.createQuery(pointer, Integer.class).setParameter("value", valueComplex).setMaxResults(1).list()
+			        .isEmpty()) {
+				return false;
+			}
 		}
 		for (Capture capture : session.createQuery("from Capture c where c.obs.valueComplex = :value", Capture.class)
 		        .setParameter("value", valueComplex).list()) {
