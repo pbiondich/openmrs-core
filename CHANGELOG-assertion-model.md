@@ -100,5 +100,5 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   marked; a delete only counts once storage no longer has the file. Withdrawing consent deletes an expiring artifact
   at once; scanned forms and other kept artifacts are never deleted, the row always stays, and voided captures are
   not served. `ObsService` no longer deletes a complex obs's file on edit when the new version kept it or a capture
-  holds it, and refuses to purge such an obs. Privileges `Get Captures`, `Add Captures` and `Edit Captures`; creating
+  holds it, and refuses to purge such an obs; a voided complex obs whose file is gone is fetched without its data rather than failing. Privileges `Get Captures`, `Add Captures` and `Edit Captures`; creating
   a capture also needs Add Observations.

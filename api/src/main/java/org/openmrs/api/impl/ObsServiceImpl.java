@@ -419,6 +419,23 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	}
 
 	/**
+	 * Loads a complex obs's data. A voided complex obs may no longer have its file, as when an edit
+	 * replaced it or a capture's artifact was deleted, and is then returned without its data rather
+	 * than failing.
+	 */
+	private Obs withComplexData(Obs obs) {
+		try {
+			return getHandler(obs).getObs(obs, ComplexObsHandler.RAW_VIEW);
+		} catch (RuntimeException e) {
+			if (!obs.getVoided()) {
+				throw e;
+			}
+			log.debug("The file of voided complex obs {} could not be read", obs.getUuid(), e);
+			return obs;
+		}
+	}
+
+	/**
 	 * @see org.openmrs.api.ObsService#getObs(java.lang.Integer)
 	 */
 	@Override
@@ -426,7 +443,7 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	public Obs getObs(Integer obsId) throws APIException {
 		Obs obs = dao.getObs(obsId);
 		if (obs != null && obs.isComplex()) {
-			return getHandler(obs).getObs(obs, ComplexObsHandler.RAW_VIEW);
+			return withComplexData(obs);
 		}
 		return obs;
 	}
@@ -755,7 +772,7 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	public Obs getObsByUuid(String uuid) throws APIException {
 		Obs obsByUuid = dao.getObsByUuid(uuid);
 		if (obsByUuid != null && obsByUuid.isComplex()) {
-			return getHandler(obsByUuid).getObs(obsByUuid, ComplexObsHandler.RAW_VIEW);
+			return withComplexData(obsByUuid);
 		}
 		return obsByUuid;
 	}
