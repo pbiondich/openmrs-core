@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+
+    This Source Code Form is subject to the terms of the Mozilla Public License,
+    v. 2.0. If a copy of the MPL was not distributed with this file, You can
+    obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+    the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+
+    Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+    graphic logo is a trademark of OpenMRS Inc.
+
+-->
+<dataset>
+  <obs obs_id="9001" person_id="7" encounter_id="3" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="imci sheet|complex_obs/20081001-imci.pdf" creator="1" date_created="2008-08-18 14:09:05.0" voided="false" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a01"/>
+  <obs obs_id="9002" person_id="7" encounter_id="3" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="wound photo|photo.JPG" creator="1" date_created="2008-08-18 14:09:05.0" voided="false" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a02"/>
+  <obs obs_id="9003" person_id="7" encounter_id="3" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="visit recording.mp3 file |complex_obs/20081001-abc" creator="1" date_created="2008-08-18 14:09:05.0" voided="false" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a03"/>
+  <obs obs_id="9004" person_id="7" encounter_id="3" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="referral letter|letter.docx" creator="1" date_created="2008-08-18 14:09:05.0" voided="false" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a04"/>
+  <obs obs_id="9005" person_id="7" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="xray|xray.png" creator="1" date_created="2008-08-18 14:09:05.0" voided="false" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a05"/>
+  <obs obs_id="9006" person_id="7" encounter_id="3" concept_id="8480" status="FINAL" obs_datetime="2008-08-01 00:00:00.0" location_id="1" value_complex="old sheet|old.pdf" creator="1" date_created="2008-08-18 14:09:05.0" voided="true" voided_by="1" date_voided="2008-08-19 00:00:00.0" void_reason="replaced" uuid="a1c0e2f4-1b3d-4e5f-8a9b-0c1d2e3f4a06"/>
+</dataset>

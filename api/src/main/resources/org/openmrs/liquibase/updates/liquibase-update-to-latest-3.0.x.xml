@@ -804,4 +804,22 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p3-capture-backfill-2026-10-23" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<tableExists tableName="capture"/>
+		</preConditions>
+		<comment>
+			Gives each existing complex obs of an encounter that holds a PDF, an image, a recording, a video or plain
+			text a capture pointing at it; the obs and its file are left as they are, and backfilled captures never
+			expire and have no checksum. Rolling back deletes the backfilled captures, so it must come before anything
+			points at them
+		</comment>
+		<customChange class="org.openmrs.util.databasechange.ComplexObsCaptureBackfillChangeSet"/>
+		<rollback>
+			<delete tableName="capture">
+				<where>sha256 IS NULL</where>
+			</delete>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

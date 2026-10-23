@@ -118,3 +118,10 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   An edited obs keeps all three; `transferEncounter`'s copies drop them, since the capture stays with the encounter it
   was captured in, and the voided originals keep them. Adding the two foreign keys rebuilds `obs` on MySQL, as the
   asserter changeset already does.
+- Backfill (`ComplexObsCaptureBackfillChangeSet`, decided with Paul): each existing complex obs of an encounter that
+  holds a PDF (a scanned form), an image, a recording, a video or plain text, judged by its file name's extension,
+  gets a capture pointing at it. The obs and its file are left exactly as they are; backfilled captures never expire,
+  audio included, have no checksum (the file is not read) and consent NOT_RECORDED. Files of other types, such as Word
+  documents, and complex obs without an encounter are skipped, and running it again adds nothing. Form entries with no
+  file get no synthetic capture: the obs already carries its form path. Rolling back deletes the backfilled captures
+  (those with no checksum).
