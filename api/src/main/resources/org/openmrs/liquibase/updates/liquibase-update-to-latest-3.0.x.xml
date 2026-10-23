@@ -623,4 +623,81 @@
 		</rollback>
 	</changeSet>
 
+	<changeSet id="assertion-model-p3-capture-2026-10-22" author="pbiondich">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="capture"/>
+			</not>
+		</preConditions>
+		<comment>
+			What an encounter was captured in, such as a scanned form or an audio recording. The artifact is the
+			complex obs obs_id; an intermediate form, such as a transcript, names the capture it was derived from. The
+			row stays after the artifact is deleted. A null expires_at means the artifact is kept for good, and a null
+			sha256 a capture backfilled from an existing complex obs
+		</comment>
+		<createTable tableName="capture">
+			<column name="capture_id" autoIncrement="true" type="INT">
+				<constraints nullable="false" primaryKey="true"/>
+			</column>
+			<column name="encounter_id" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="kind" type="VARCHAR(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="obs_id" type="INT">
+				<constraints nullable="false" unique="true" uniqueConstraintName="capture_obs"/>
+			</column>
+			<column name="derived_from_capture_id" type="INT"/>
+			<column name="mime_type" type="VARCHAR(255)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="sha256" type="VARCHAR(64)"/>
+			<column name="consent_status" type="VARCHAR(50)" defaultValue="NOT_RECORDED">
+				<constraints nullable="false"/>
+			</column>
+			<column name="expires_at" type="DATETIME"/>
+			<column name="artifact_deleted_at" type="DATETIME"/>
+			<column name="creator" type="INT">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_created" type="DATETIME">
+				<constraints nullable="false"/>
+			</column>
+			<column name="changed_by" type="INT"/>
+			<column name="date_changed" type="DATETIME"/>
+			<column name="voided" type="BOOLEAN" defaultValueBoolean="false">
+				<constraints nullable="false"/>
+			</column>
+			<column name="voided_by" type="INT"/>
+			<column name="date_voided" type="DATETIME"/>
+			<column name="void_reason" type="VARCHAR(255)"/>
+			<column name="uuid" type="CHAR(38)">
+				<constraints nullable="false" unique="true"/>
+			</column>
+		</createTable>
+		<createIndex tableName="capture" indexName="capture_encounter_idx">
+			<column name="encounter_id"/>
+		</createIndex>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="obs_id" constraintName="capture_obs_fk"
+			referencedTableName="obs" referencedColumnNames="obs_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="derived_from_capture_id"
+			constraintName="capture_derived_from" referencedTableName="capture" referencedColumnNames="capture_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="encounter_id" constraintName="capture_encounter"
+			referencedTableName="encounter" referencedColumnNames="encounter_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="creator" constraintName="capture_creator"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="changed_by" constraintName="capture_changed_by"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<addForeignKeyConstraint baseTableName="capture" baseColumnNames="voided_by" constraintName="capture_voided_by"
+			referencedTableName="users" referencedColumnNames="user_id"/>
+		<createIndex tableName="capture" indexName="capture_retention_idx">
+			<column name="artifact_deleted_at"/>
+			<column name="expires_at"/>
+		</createIndex>
+		<rollback>
+			<dropTable tableName="capture"/>
+		</rollback>
+	</changeSet>
+
 </databaseChangeLog>

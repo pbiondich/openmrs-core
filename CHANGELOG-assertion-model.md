@@ -83,3 +83,27 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   version, even an unknown one. Existing encounters are not backfilled: null means unknown, which an "unknown" row
   would only restate while making every encounter row change. `ConceptService` gets versions by uuid, by label and the
   current one, and saves and retires them under the concept privileges.
+- `capture` (`Capture`, data: encounter, kind `AUDIO` | `VIDEO` | `HANDWRITTEN` | `SCANNED_FORM` | `TYPED_TEXT` |
+  `IMAGE`, obs_id, derived_from_capture_id, mime_type, sha256, consent_status `NOT_RECORDED` | `GIVEN` | `WITHDRAWN`,
+  expires_at, artifact_deleted_at). Every capture sits on a complex obs of its encounter, which holds the artifact as
+  received and is never overwritten (decided with Paul). `CaptureService.createCapture` takes a complex concept whose
+  handler stores bytes as received (not the image or text handler, which re-encode); it reads, counts and checksums
+  the upload before storage sees it (storage copies on another thread and takes a stall for the end), checks the
+  stored length, saves the obs final whatever the finalization policy (the artifact is evidence, not a claim) and
+  titled with the capture's uuid, which must be a uuid, and deletes the stored file if the transaction rolls back.
+  An intermediate form, such as a transcript, is a capture derived from another of the same encounter. Each kind
+  allows only its own media types (audio, video, images, PDF, plain text; never HTML or SVG), and artifacts are capped
+  at `capture.max_size_mb` (default 100). Audio and video expire after `capture.retention_days` (default 90); every
+  other kind is kept, and a null expires_at means kept. Once saved, the obs, checksum, expiry, consent and deletion
+  columns are read-only in the mapping; the service changes consent and deletion with bulk updates, going by what is
+  in the database (Envers does not see those), and `voidCapture` refuses an unsaved capture. A daily
+  `CaptureRetentionTaskHandler` deletes expired artifacts, each in its own transaction: the file is deleted, every
+  live version of the complex obs voided through the session with its status kept (it was not entered in error), and
+  the capture marked; a delete only counts once storage no longer has the file. Withdrawing consent deletes an
+  expiring artifact at once; scanned forms and other kept artifacts are never deleted, the row always stays, and
+  voided captures, or an artifact whose obs was voided other than by an edit, are not served. `ObsService` no longer
+  deletes a complex obs's file on edit when the new version kept it or a capture holds it, judged on the obs as saved;
+  purging an obs deletes the captures holding its file unless something points to them, and is refused if so; and a
+  voided complex obs whose file is gone is fetched without its data rather than failing (any other failure still
+  fails). Privileges `Get Captures`, `Add Captures` and `Edit Captures`; creating a capture also needs Add
+  Observations.

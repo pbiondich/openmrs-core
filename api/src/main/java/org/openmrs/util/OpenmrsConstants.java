@@ -315,6 +315,20 @@ public final class OpenmrsConstants {
 
 	public static final String GLOBAL_PROPERTY_COMPLEX_OBS_DIR = "obs.complex_obs_dir";
 
+	/**
+	 * The largest capture artifact, in megabytes, that may be stored.
+	 *
+	 * @since 3.0.0
+	 */
+	public static final String GLOBAL_PROPERTY_CAPTURE_MAX_SIZE_MB = "capture.max_size_mb";
+
+	/**
+	 * How many days audio and video capture artifacts are kept before they expire.
+	 *
+	 * @since 3.0.0
+	 */
+	public static final String GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS = "capture.retention_days";
+
 	public static final String GLOBAL_PROPERTY_MIN_SEARCH_CHARACTERS = "minSearchCharacters";
 
 	public static final int GLOBAL_PROPERTY_DEFAULT_MIN_SEARCH_CHARACTERS = 2;
@@ -796,6 +810,12 @@ public final class OpenmrsConstants {
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_PATIENT_IDENTIFIER_IMPORTANT_TYPES, "",
 		        "A comma delimited list of PatientIdentifier names : PatientIdentifier locations that will be displayed on the patient dashboard.  E.g.: TRACnet ID:Rwanda,ELDID:Kenya"));
+
+		props.add(new GlobalProperty(GLOBAL_PROPERTY_CAPTURE_MAX_SIZE_MB, "100",
+		        "The largest capture artifact, such as a scanned form or a recording, that may be stored, in megabytes"));
+
+		props.add(new GlobalProperty(GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS, "90",
+		        "How many days audio and video capture artifacts are kept before they expire; other kinds are kept"));
 
 		props.add(new GlobalProperty(GLOBAL_PROPERTY_COMPLEX_OBS_DIR, "complex_obs",
 		        "Default directory for storing complex obs."));

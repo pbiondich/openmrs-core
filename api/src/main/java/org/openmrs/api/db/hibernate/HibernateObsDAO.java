@@ -29,6 +29,7 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
+import org.openmrs.Capture;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
@@ -527,6 +528,35 @@ public class HibernateObsDAO implements ObsDAO {
 		return !sessionFactory.getCurrentSession()
 		        .createQuery("select o.obsId from Obs o where o.previousVersion = :obs", Integer.class)
 		        .setParameter("obs", obs).setMaxResults(1).list().isEmpty();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#isComplexDataCaptured(String)
+	 */
+	@Override
+	public boolean isComplexDataCaptured(String valueComplex) {
+		// an edit copies the value to the new version, so the file is held by every version of the obs
+		return valueComplex != null && !sessionFactory.getCurrentSession()
+		        .createQuery("select c.captureId from Capture c where c.obs.valueComplex = :value", Integer.class)
+		        .setParameter("value", valueComplex).setMaxResults(1).list().isEmpty();
+	}
+
+	/**
+	 * @see org.openmrs.api.db.ObsDAO#releaseCaptures(String)
+	 */
+	@Override
+	public boolean releaseCaptures(String valueComplex) {
+		Session session = sessionFactory.getCurrentSession();
+		if (valueComplex == null
+		        || !session.createQuery("select c.captureId from Capture c where c.derivedFrom.obs.valueComplex = :value",
+		            Integer.class).setParameter("value", valueComplex).setMaxResults(1).list().isEmpty()) {
+			return valueComplex == null;
+		}
+		for (Capture capture : session.createQuery("from Capture c where c.obs.valueComplex = :value", Capture.class)
+		        .setParameter("value", valueComplex).list()) {
+			session.remove(capture);
+		}
+		return true;
 	}
 
 	/**

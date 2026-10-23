@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+
+    This Source Code Form is subject to the terms of the Mozilla Public License,
+    v. 2.0. If a copy of the MPL was not distributed with this file, You can
+    obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+    the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+
+    Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+    graphic logo is a trademark of OpenMRS Inc.
+
+-->
+<dataset>
+  <global_property property="obs.complex_obs_dir" property_value="complex_obs" uuid="5b2a3c1e-6f0d-4c6e-9a51-1f3d2e8b7c40"/>
+
+  <concept concept_id="8480" retired="false" datatype_id="13" class_id="5" is_set="false" creator="1" date_created="2005-01-01 00:00:00.0" uuid="3c1f0e7a-2b8d-4d5e-9f61-7a2b4c8d9e01"/>
+  <concept_complex concept_id="8480" handler="BinaryDataHandler" />
+  <concept_name concept_id="8480" name="Captured artifact" locale="en_GB" creator="1" date_created="2008-08-15 13:52:53.0" concept_name_id="8480" concept_name_type="FULLY_SPECIFIED" locale_preferred="0" voided="false" uuid="4d2a1f8b-3c9e-4e6f-8a72-8b3c5d9e0f12"/>
+  <concept concept_id="8481" retired="false" datatype_id="13" class_id="5" is_set="false" creator="1" date_created="2005-01-01 00:00:00.0" uuid="5e3b2a9c-4dae-4f70-9b83-9c4d6eaf1023"/>
+  <concept_complex concept_id="8481" handler="ImageHandler" />
+  <concept_name concept_id="8481" name="Re-encoded image" locale="en_GB" creator="1" date_created="2008-08-15 13:52:53.0" concept_name_id="8481" concept_name_type="FULLY_SPECIFIED" locale_preferred="0" voided="false" uuid="6f4c3bad-5ebf-4081-8c94-ad5e7fb02134"/>
+</dataset>

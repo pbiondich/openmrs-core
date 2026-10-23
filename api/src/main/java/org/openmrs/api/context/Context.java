@@ -37,6 +37,7 @@ import org.openmrs.aop.AOPConfig;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.AttestationService;
+import org.openmrs.api.CaptureService;
 import org.openmrs.api.CohortService;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.ConditionService;
@@ -480,6 +481,14 @@ public class Context {
 	 */
 	public static ConditionService getConditionService() {
 		return getServiceContext().getConditionService();
+	}
+
+	/**
+	 * @return capture-related services
+	 * @since 3.0.0
+	 */
+	public static CaptureService getCaptureService() {
+		return getServiceContext().getCaptureService();
 	}
 
 	/**
