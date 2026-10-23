@@ -27,8 +27,11 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
+import org.openmrs.Concept;
+import org.openmrs.ConceptComplex;
 import org.openmrs.Derivation;
 import org.openmrs.Encounter;
+import org.openmrs.Obs;
 import org.openmrs.User;
 import org.openmrs.UserType;
 import org.openmrs.api.APIException;
@@ -36,7 +39,11 @@ import org.openmrs.api.CaptureService;
 import org.openmrs.api.StorageService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.CaptureDAO;
-import org.openmrs.api.storage.ObjectMetadata;
+import org.openmrs.obs.ComplexData;
+import org.openmrs.obs.ComplexObsHandler;
+import org.openmrs.obs.handler.BinaryDataHandler;
+import org.openmrs.obs.handler.BinaryStreamHandler;
+import org.openmrs.obs.handler.MediaHandler;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
@@ -58,11 +65,6 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 
 	private static final Logger log = LoggerFactory.getLogger(CaptureServiceImpl.class);
 
-	/**
-	 * The storage group capture artifacts are kept under.
-	 */
-	public static final String STORAGE_GROUP = "captures";
-
 	private static final int DEFAULT_RETENTION_DAYS = 90;
 
 	private static final long DEFAULT_MAX_SIZE_MB = 100;
@@ -76,10 +78,10 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 	private StorageService storageService;
 
 	/**
-	 * @see CaptureService#createCapture(Capture, InputStream)
+	 * @see CaptureService#createCapture(Capture, Concept, InputStream)
 	 */
 	@Override
-	public Capture createCapture(Capture capture, InputStream artifact) {
+	public Capture createCapture(Capture capture, Concept concept, InputStream artifact) {
 		if (capture.getCaptureId() != null || capture.getEncounter() == null || capture.getKind() == null
 		        || artifact == null) {
 			throw new APIException("Capture.error.invalid", (Object[]) null);
@@ -94,6 +96,15 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 			throw new APIException("Capture.error.mimeType", new Object[] { capture.getMimeType(), capture.getKind() });
 		}
 		capture.setMimeType(mimeType);
+		checkConcept(concept);
+		if (capture.getDerivedFrom() != null) {
+			// judged as saved: of the same encounter and not voided
+			Capture source = saved(capture.getDerivedFrom());
+			if (source.getVoided() || !source.getEncounter().equals(capture.getEncounter())) {
+				throw new APIException("Capture.error.derivedFrom", (Object[]) null);
+			}
+			capture.setDerivedFrom(source);
+		}
 		// audio and video expire, every other kind is kept
 		Date now = new Date();
 		capture.setExpiresAt(capture.getKind() == Kind.AUDIO || capture.getKind() == Kind.VIDEO
@@ -101,25 +112,49 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		        : null);
 		capture.setArtifactDeletedAt(null);
 
+		// the artifact is a complex obs of the encounter, stored as received; it is titled with the
+		// capture's uuid, so nothing the caller names becomes part of a storage key
+		Encounter encounter = capture.getEncounter();
+		Obs obs = new Obs(encounter.getPatient(), concept, encounter.getEncounterDatetime(), encounter.getLocation());
+		obs.setEncounter(encounter);
 		MessageDigest sha256 = sha256();
-		long maxBytes = maxSizeMb() * 1024 * 1024;
-		String key;
 		// not closed here: the caller closes the artifact
-		InputStream in = new DigestInputStream(new LimitedInputStream(artifact, maxBytes), sha256);
+		InputStream in = new DigestInputStream(new LimitedInputStream(artifact, maxSizeMb() * 1024 * 1024), sha256);
+		obs.setComplexData(new ComplexData(capture.getUuid(), in));
 		try {
-			// storage picks the key, so nothing the caller sends becomes part of a path
-			key = storageService.saveData(in, ObjectMetadata.builder().setMimeType(mimeType).build(), STORAGE_GROUP);
-		} catch (IOException e) {
-			// some storage wraps the stream's exception
+			obs = Context.getObsService().saveObs(obs, null);
+		} catch (RuntimeException e) {
+			// the handlers and storage report the size limit wrapped in their own exceptions
 			if (ExceptionUtils.indexOfThrowable(e, TooLargeException.class) >= 0) {
 				throw new APIException("Capture.error.tooLarge", new Object[] { maxSizeMb() }, e);
 			}
-			throw new APIException("Capture.error.store", (Object[]) null, e);
+			throw e;
 		}
-		purgeIfRolledBack(key);
-		capture.setArtifactKey(key);
+		purgeIfRolledBack(storageKey(obs));
+		capture.setObs(obs);
 		capture.setSha256(HexFormat.of().formatHex(sha256.digest()));
 		return dao.saveCapture(capture);
+	}
+
+	/**
+	 * A capture's artifact must be stored exactly as it was received, so its concept must be complex
+	 * with a handler that keeps the bytes; the image and text handlers re-encode them.
+	 */
+	private void checkConcept(Concept concept) {
+		ConceptComplex complex = null;
+		if (concept != null && concept.getConceptId() != null) {
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+				complex = Context.getConceptService().getConceptComplex(concept.getConceptId());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_CONCEPTS);
+			}
+		}
+		ComplexObsHandler handler = complex == null ? null : Context.getObsService().getHandler(complex.getHandler());
+		if (!(handler instanceof BinaryDataHandler || handler instanceof BinaryStreamHandler
+		        || handler instanceof MediaHandler)) {
+			throw new APIException("Capture.error.concept", (Object[]) null);
+		}
 	}
 
 	/**
@@ -149,13 +184,14 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		if (capture.getCaptureId() == null) {
 			throw new APIException("Capture.error.notSaved", (Object[]) null);
 		}
-		// the key comes from the database, never from the object passed in
-		String key = capture.getVoided() ? null : dao.getReadableArtifactKey(capture.getCaptureId());
-		if (key == null) {
+		// the artifact's obs comes from the database, never from the object passed in; that obs may be
+		// voided by an edit, which keeps its file
+		Obs obs = capture.getVoided() ? null : dao.getReadableArtifactObs(capture.getCaptureId());
+		if (obs == null) {
 			throw new APIException("Capture.error.noArtifact", new Object[] { capture.getUuid() });
 		}
 		try {
-			return storageService.getData(key);
+			return storageService.getData(storageKey(obs));
 		} catch (IOException e) {
 			throw new APIException("Capture.error.read", new Object[] { capture.getUuid() }, e);
 		}
@@ -280,9 +316,10 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 
 	/**
 	 * Deletes a capture's artifact if, going by the capture as reloaded from the database, it is due:
-	 * it expires, is still stored, and has expired or its consent was withdrawn. The file is deleted
-	 * before the row is marked, so a rollback can only leave a row that the next run marks, never a
-	 * file the row says is gone.
+	 * it expires, is still stored, and has expired or its consent was withdrawn. The file is deleted,
+	 * then its complex obs voided and the capture marked, so a rollback can only leave rows that the
+	 * next run marks, never a file the rows say is gone. The obs keeps its status: it was not entered
+	 * in error.
 	 *
 	 * @return true if it was due and so deleted
 	 */
@@ -291,9 +328,8 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		        || (capture.getExpiresAt().after(now) && capture.getConsentStatus() != Capture.ConsentStatus.WITHDRAWN)) {
 			return false;
 		}
-		String key = capture.getArtifactKey();
-		// never delete outside capture storage, whatever a row says
-		if (key == null || !key.startsWith(STORAGE_GROUP + "/") || key.contains("..")) {
+		String key = storageKey(capture.getObs());
+		if (key.contains("..")) {
 			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() });
 		}
 		try {
@@ -305,9 +341,34 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		} catch (IOException | UncheckedIOException e) {
 			throw new APIException("Capture.error.delete", new Object[] { capture.getUuid() }, e);
 		}
+		dao.voidArtifactObs(capture.getObs().getObsId(),
+		    capture.getConsentStatus() == Capture.ConsentStatus.WITHDRAWN ? "Capture consent withdrawn"
+		            : "Capture artifact expired",
+		    now);
 		dao.markArtifactDeleted(capture.getCaptureId(), now);
 		dao.reload(capture);
 		return true;
+	}
+
+	/**
+	 * The storage key of a complex obs's file, found the way the complex obs handlers find it.
+	 */
+	private String storageKey(Obs obs) {
+		String[] names = obs.getValueComplex().split("\\|");
+		String key = StringUtils.trim(names[names.length - 1]);
+		if (!storageService.exists(key)) {
+			// a file from before the storage service, in the complex obs directory
+			String directory;
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+				directory = Context.getAdministrationService()
+				        .getGlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_COMPLEX_OBS_DIR);
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+			}
+			key = directory + '/' + key;
+		}
+		return key;
 	}
 
 	/**
@@ -323,7 +384,7 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 
 	/**
 	 * Deletes a just stored artifact if the transaction saving its capture rolls back, so storage never
-	 * keeps an artifact no capture points to.
+	 * keeps a file no obs points to.
 	 */
 	private void purgeIfRolledBack(String key) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {

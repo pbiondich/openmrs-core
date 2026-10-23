@@ -17,6 +17,7 @@ import org.hibernate.SessionFactory;
 import org.openmrs.Capture;
 import org.openmrs.Derivation;
 import org.openmrs.Encounter;
+import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.CaptureDAO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,10 +71,19 @@ public class HibernateCaptureDAO implements CaptureDAO {
 	}
 
 	@Override
-	public String getReadableArtifactKey(Integer captureId) {
+	public Obs getReadableArtifactObs(Integer captureId) {
 		return sessionFactory.getCurrentSession().createQuery(
-		    "select artifactKey from Capture where captureId = :id and voided = false" + " and artifactDeletedAt is null",
-		    String.class).setParameter("id", captureId).uniqueResult();
+		    "select c.obs from Capture c where c.captureId = :id and c.voided = false" + " and c.artifactDeletedAt is null",
+		    Obs.class).setParameter("id", captureId).uniqueResult();
+	}
+
+	@Override
+	public void voidArtifactObs(Integer obsId, String reason, Date voidedAt) {
+		sessionFactory.getCurrentSession()
+		        .createMutationQuery("update Obs set voided = true, voidedBy = :user, dateVoided = :voidedAt,"
+		                + " voidReason = :reason where obsId = :id and voided = false")
+		        .setParameter("user", Context.getAuthenticatedUser()).setParameter("voidedAt", voidedAt)
+		        .setParameter("reason", reason).setParameter("id", obsId).executeUpdate();
 	}
 
 	@Override

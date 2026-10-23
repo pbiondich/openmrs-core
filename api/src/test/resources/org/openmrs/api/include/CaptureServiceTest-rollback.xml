@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+
+    This Source Code Form is subject to the terms of the Mozilla Public License,
+    v. 2.0. If a copy of the MPL was not distributed with this file, You can
+    obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+    the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+
+    Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+    graphic logo is a trademark of OpenMRS Inc.
+
+-->
+<dataset>
+  <concept concept_id="8482" retired="false" datatype_id="13" class_id="5" is_set="false" creator="1" date_created="2005-01-01 00:00:00.0" uuid="7a5d4cbe-6fc0-4192-9da5-be6f80c13245"/>
+  <concept_complex concept_id="8482" handler="BinaryDataHandler" />
+  <concept_name concept_id="8482" name="Captured artifact, rolled back" locale="en_GB" creator="1" date_created="2008-08-15 13:52:53.0" concept_name_id="8482" concept_name_type="FULLY_SPECIFIED" locale_preferred="0" voided="false" uuid="8b6e5dcf-70d1-42a3-8eb6-cf7091d24356"/>
+</dataset>

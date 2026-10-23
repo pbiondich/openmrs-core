@@ -15,6 +15,7 @@ import java.util.List;
 import org.openmrs.Capture;
 import org.openmrs.Derivation;
 import org.openmrs.Encounter;
+import org.openmrs.Obs;
 
 /**
  * Database methods for {@link org.openmrs.api.CaptureService}.
@@ -38,10 +39,15 @@ public interface CaptureDAO {
 
 	/**
 	 * @param captureId a capture
-	 * @return its artifact's key, if the capture is not voided and its artifact is still stored;
-	 *         otherwise null
+	 * @return the complex obs holding its artifact, if the capture is not voided and its artifact is
+	 *         still stored; otherwise null
 	 */
-	String getReadableArtifactKey(Integer captureId);
+	Obs getReadableArtifactObs(Integer captureId);
+
+	/**
+	 * Voids the complex obs whose artifact was deleted, in the database, keeping its status.
+	 */
+	void voidArtifactObs(Integer obsId, String reason, Date voidedAt);
 
 	/**
 	 * @param now the time to judge expiry by

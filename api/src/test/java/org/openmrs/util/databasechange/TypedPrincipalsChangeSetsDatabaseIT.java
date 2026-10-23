@@ -66,7 +66,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertEquals("REQUIRE_ATTESTATION", getFinalizationAction(connection, "SOFTWARE"));
 			assertTrue(hasColumn(connection, "obs_attestation_item", "outcome"));
 			assertTrue(hasColumn(connection, "encounter", "dictionary_version_id"));
-			assertTrue(hasColumn(connection, "capture", "artifact_key"));
+			assertTrue(hasColumn(connection, "capture", "obs_id"));
 			assertTrue(hasColumn(connection, "derivation", "agent_user_id"));
 			assertTrue(hasColumn(connection, "obs", "span"));
 		}
@@ -88,7 +88,7 @@ public class TypedPrincipalsChangeSetsDatabaseIT extends DatabaseIT {
 			assertFalse(hasColumn(connection, "obs_attestation", "attester_id"));
 			assertFalse(hasColumn(connection, "encounter", "dictionary_version_id"));
 			assertFalse(hasColumn(connection, "dictionary_version", "label"));
-			assertFalse(hasColumn(connection, "capture", "artifact_key"));
+			assertFalse(hasColumn(connection, "capture", "obs_id"));
 			assertFalse(hasColumn(connection, "derivation", "agent_user_id"));
 			assertFalse(hasColumn(connection, "obs", "capture_id"));
 			assertFalse(hasColumn(connection, "obs", "span"));

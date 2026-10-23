@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.openmrs.Capture;
+import org.openmrs.Concept;
 import org.openmrs.Derivation;
 import org.openmrs.Encounter;
 import org.openmrs.util.PrivilegeConstants;
@@ -20,41 +21,49 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Captures: the scanned forms, recordings and other artifacts encounters are captured in, and the
- * derivations, runs of an agent such as an extraction model, that took obs from them. Artifacts are
- * kept by the {@link StorageService}, never in the database. Audio and video expire after
+ * derivations, runs of an agent such as an extraction model, that took obs from them. Each artifact
+ * is a complex obs of its encounter, stored as received and never overwritten; the capture records
+ * what it is, the consent and how long it is kept. Audio and video expire after
  * {@link org.openmrs.util.OpenmrsConstants#GLOBAL_PROPERTY_CAPTURE_RETENTION_DAYS} days, and every
- * other kind is kept; the capture row always stays.
+ * other kind is kept; an expired artifact's file is deleted and its obs voided, and the capture
+ * always stays. An intermediate form, such as a transcript, is a capture derived from another.
  *
  * @since 3.0.0
  */
 public interface CaptureService extends OpenmrsService {
 
 	/**
-	 * Stores a new capture's artifact and saves the capture. Storage picks the artifact's key, so
-	 * nothing the caller sends becomes part of a path, and the service sets the checksum and how long
-	 * the artifact is kept from its kind. If the transaction rolls back, the stored artifact is
-	 * deleted.
+	 * Stores a new capture's artifact as a complex obs of its encounter and saves the capture. The
+	 * service titles the obs with the capture's uuid, so nothing the caller names becomes part of a
+	 * storage key, and sets the checksum and how long the artifact is kept from its kind. Saving the
+	 * obs needs Add Observations as well. If the transaction rolls back, the stored file is deleted.
 	 * <p>
-	 * <strong>Should</strong> store the artifact with its checksum<br/>
+	 * <strong>Should</strong> store the artifact as a complex obs with its checksum<br/>
 	 * <strong>Should</strong> keep a scanned form and expire audio<br/>
-	 * <strong>Should</strong> ignore an expiry, key or checksum the caller set<br/>
+	 * <strong>Should</strong> ignore an obs, expiry or checksum the caller set<br/>
 	 * <strong>Should</strong> fail for a capture that is already saved<br/>
 	 * <strong>Should</strong> fail for a capture whose consent is already withdrawn<br/>
 	 * <strong>Should</strong> keep the consent the caller recorded<br/>
 	 * <strong>Should</strong> expire audio after the configured number of days<br/>
 	 * <strong>Should</strong> fail for a media type the kind does not allow<br/>
+	 * <strong>Should</strong> fail for a concept whose handler would not store the bytes as
+	 * received<br/>
 	 * <strong>Should</strong> fail for an artifact over the size limit<br/>
-	 * <strong>Should</strong> delete the artifact if the transaction rolls back
+	 * <strong>Should</strong> delete the artifact if the transaction rolls back<br/>
+	 * <strong>Should</strong> take a capture derived from another of the same encounter<br/>
+	 * <strong>Should</strong> fail for a capture derived from one of another encounter or a voided one
 	 *
 	 * @param capture a new capture, with its encounter, kind and media type, and optionally whether the
-	 *            patient gave consent
+	 *            patient gave consent and the capture it was derived from
+	 * @param concept the complex concept the artifact is recorded under; its handler must store the
+	 *            bytes as received (BinaryDataHandler, BinaryStreamHandler or MediaHandler)
 	 * @param artifact the artifact's content, which the caller closes
 	 * @return the saved capture
 	 * @throws org.springframework.security.access.AccessDeniedException if the current user lacks
 	 *             permission
 	 */
 	@PreAuthorize("hasAuthority('" + PrivilegeConstants.ADD_CAPTURES + "')")
-	Capture createCapture(Capture capture, InputStream artifact);
+	Capture createCapture(Capture capture, Concept concept, InputStream artifact);
 
 	/**
 	 * @param uuid the uuid of a capture
@@ -81,7 +90,8 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> stream the stored artifact<br/>
 	 * <strong>Should</strong> fail once the artifact is deleted<br/>
 	 * <strong>Should</strong> fail for a voided capture<br/>
-	 * <strong>Should</strong> read the key from the database, not the object passed in
+	 * <strong>Should</strong> read the artifact's obs from the database, not the object passed in<br/>
+	 * <strong>Should</strong> still read the artifact after its obs was edited
 	 *
 	 * @param capture a saved capture
 	 * @return its artifact's content, which the caller closes
@@ -128,7 +138,7 @@ public interface CaptureService extends OpenmrsService {
 	 * <strong>Should</strong> never delete a scanned form<br/>
 	 * <strong>Should</strong> not delete an artifact that has not expired<br/>
 	 * <strong>Should</strong> fail if storage still has the artifact after deleting it<br/>
-	 * <strong>Should</strong> never delete a key outside capture storage
+	 * <strong>Should</strong> void the artifact's obs, keeping its status
 	 *
 	 * @param capture a saved capture
 	 * @return true if the artifact was due and so deleted

@@ -209,6 +209,7 @@ public interface ObsService extends OpenmrsService {
 	 * <p>
 	 * <strong>Should</strong> throw APIException if given true cascade<br/>
 	 * <strong>Should</strong> delete any obsGroupMembers before deleting the obs<br/>
+	 * <strong>Should</strong> refuse an obs whose file a capture holds<br/>
 	 * <strong>Should</strong> not delete referenced orders when purging obs
 	 *
 	 * @param obs the observation to remove from the database

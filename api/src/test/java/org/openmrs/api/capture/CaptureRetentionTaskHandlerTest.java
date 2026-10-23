@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.api.CaptureService;
+import org.openmrs.api.CaptureServiceTest;
 import org.openmrs.api.StorageService;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -24,7 +25,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link CaptureRetentionTaskHandler}.
@@ -38,28 +38,29 @@ public class CaptureRetentionTaskHandlerTest extends BaseContextSensitiveTest {
 	private CaptureRetentionTaskHandler handler;
 
 	@Test
-	public void execute_shouldDeleteExpiredArtifactsAndNotStopAtOneThatCannotBeDeleted() throws Exception {
+	public void execute_shouldDeleteExpiredArtifactsAndNotStopAtOneThatCannotBeDeleted() {
+		executeDataSet(CaptureServiceTest.DATASET);
 		Capture bad = expire(create());
-		String other = storageService.saveData(new ByteArrayInputStream(new byte[] { 1 }), null, "complex_obs");
 		Context.getAdministrationService().executeSQL(
-		    "update capture set artifact_key = '" + other + "' where capture_id = " + bad.getCaptureId(), false);
+		    "update obs set value_complex = 'x|../outside' where obs_id = " + bad.getObs().getObsId(), false);
+		Context.refreshEntity(bad.getObs());
 		Capture good = expire(create());
+		String goodKey = CaptureServiceTest.key(good);
 
 		handler.execute(new CaptureRetentionTaskData(), null);
 
 		Context.refreshEntity(bad);
 		Context.refreshEntity(good);
 		assertNull(bad.getArtifactDeletedAt());
-		assertTrue(storageService.exists(other));
 		assertNotNull(good.getArtifactDeletedAt());
-		assertFalse(storageService.exists(good.getArtifactKey()));
-		storageService.purgeData(other);
+		assertFalse(storageService.exists(goodKey));
 	}
 
 	private Capture create() {
 		CaptureService captureService = Context.getCaptureService();
 		return captureService.createCapture(
 		    new Capture(Context.getEncounterService().getEncounter(3), Kind.AUDIO, "audio/mpeg"),
+		    Context.getConceptService().getConcept(8480),
 		    new ByteArrayInputStream("a recording".getBytes(StandardCharsets.UTF_8)));
 	}
 
