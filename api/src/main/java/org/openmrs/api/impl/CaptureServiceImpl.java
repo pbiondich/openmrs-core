@@ -29,6 +29,8 @@ import org.openmrs.Capture;
 import org.openmrs.Capture.Kind;
 import org.openmrs.Derivation;
 import org.openmrs.Encounter;
+import org.openmrs.User;
+import org.openmrs.UserType;
 import org.openmrs.api.APIException;
 import org.openmrs.api.CaptureService;
 import org.openmrs.api.StorageService;
@@ -217,8 +219,24 @@ public class CaptureServiceImpl extends BaseOpenmrsService implements CaptureSer
 		if (derivation.getCapture().getVoided()) {
 			throw new APIException("Derivation.error.captureVoided", new Object[] { derivation.getCapture().getUuid() });
 		}
+		User caller = Context.getAuthenticatedUser();
 		if (derivation.getAgent() == null) {
-			derivation.setAgent(Context.getAuthenticatedUser());
+			derivation.setAgent(caller);
+		} else if (caller == null || !caller.getUserId().equals(derivation.getAgent().getUserId())) {
+			// a run may be recorded for a software or device agent, never pinned on another person; the
+			// agent's type is read as saved, since a type cannot change
+			User agent;
+			try {
+				Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
+				agent = derivation.getAgent().getUserId() == null ? null
+				        : Context.getUserService().getUser(derivation.getAgent().getUserId());
+			} finally {
+				Context.removeProxyPrivilege(PrivilegeConstants.GET_USERS);
+			}
+			if (agent == null || agent.getUserType() == UserType.HUMAN) {
+				throw new APIException("Derivation.error.agent", (Object[]) null);
+			}
+			derivation.setAgent(agent);
 		}
 		if (derivation.getDictionaryVersion() == null) {
 			try {

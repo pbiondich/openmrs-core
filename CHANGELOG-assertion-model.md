@@ -99,7 +99,8 @@ Changes on the `assertion-model/*` branches of this fork. The plan lives in `doc
   always stays, and voided captures are not served. Privileges `Get Captures`, `Add Captures` and `Edit Captures`.
 - `derivation` (`Derivation`, data: capture, agent_user_id, dictionary_version_id, started, finished, params_hash):
   one finished run of an agent, such as an extraction model, over a capture. `CaptureService.createDerivation` defaults
-  the agent to the authenticated user and the dictionary version to the current one, needs the run to have finished
+  the agent to the authenticated user and the dictionary version to the current one, takes another user as agent only
+  if it is software or a device (never another person), needs the run to have finished
   no earlier than it started, and refuses a voided capture; every column is read-only once saved. Privilege
   `Add Derivations`; reading needs `Get Captures`.
 - `obs.capture_id`, `obs.span` (VARCHAR(255)) and `obs.derivation_id`: where an obs was taken from. The span is a

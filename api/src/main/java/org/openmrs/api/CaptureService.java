@@ -155,9 +155,12 @@ public interface CaptureService extends OpenmrsService {
 
 	/**
 	 * Records an agent's finished run over a capture. The agent defaults to the authenticated user, and
-	 * the dictionary version to the current one.
+	 * the dictionary version to the current one. Another user may be named as the agent only if it is
+	 * software or a device, so a run is never pinned on a person who did not record it.
 	 * <p>
 	 * <strong>Should</strong> default the agent and dictionary version<br/>
+	 * <strong>Should</strong> take a software agent other than the caller<br/>
+	 * <strong>Should</strong> fail for another person named as the agent<br/>
 	 * <strong>Should</strong> fail for a run that finished before it started<br/>
 	 * <strong>Should</strong> fail for a voided capture<br/>
 	 * <strong>Should</strong> judge the capture as saved, not as passed in<br/>

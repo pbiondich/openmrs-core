@@ -28,6 +28,7 @@ import org.openmrs.DictionaryVersion;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Obs;
+import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.CaptureServiceImpl;
 import org.openmrs.test.jupiter.BaseContextSensitiveTest;
@@ -366,6 +367,23 @@ public class CaptureServiceTest extends BaseContextSensitiveTest {
 		assertEquals(Context.getAuthenticatedUser(), derivation.getAgent());
 		assertEquals(current, derivation.getDictionaryVersion());
 		assertEquals(derivation, captureService.getDerivationsByCapture(derivation.getCapture()).get(0));
+	}
+
+	@Test
+	public void createDerivation_shouldTakeASoftwareAgentOtherThanTheCaller() {
+		User daemon = Context.getUserService().getUserByUuid("A4F30A1B-5EB9-11DF-A648-37A07F9C90FB");
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setAgent(daemon);
+
+		assertEquals(daemon, captureService.createDerivation(derivation).getAgent());
+	}
+
+	@Test
+	public void createDerivation_shouldFailForAnotherPersonNamedAsTheAgent() {
+		Derivation derivation = derivation(create(Kind.SCANNED_FORM, "application/pdf"));
+		derivation.setAgent(Context.getUserService().getUser(501));
+
+		assertThrows(APIException.class, () -> captureService.createDerivation(derivation));
 	}
 
 	@Test
