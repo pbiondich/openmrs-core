@@ -38,12 +38,14 @@ import org.openmrs.api.ObsService;
 import org.openmrs.api.PatientService;
 import org.openmrs.api.ProviderService;
 import org.openmrs.api.RefByUuid;
+import org.openmrs.api.StorageService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.api.db.ObsDAO;
 import org.openmrs.api.handler.SaveHandler;
 import org.openmrs.obs.ComplexData;
 import org.openmrs.obs.ComplexObsHandler;
+import org.openmrs.obs.handler.AbstractHandler;
 import org.openmrs.parameter.ObsSearchCriteria;
 import org.openmrs.parameter.ObsSearchCriteriaBuilder;
 import org.openmrs.util.OpenmrsClassLoader;
@@ -81,6 +83,9 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	@Autowired
 	@Qualifier("handlers")
 	private Map<String, ComplexObsHandler> handlers;
+
+	@Autowired
+	private StorageService storageService;
 
 	/**
 	 * Default empty constructor for this obs service
@@ -158,13 +163,10 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 			evictObsAndChildren(obs);
 			obs = Context.getObsService().getObs(obs.getObsId());
 			// delete the previous file from the appdata/complex_obs folder, unless the new version kept it or
-			// a capture holds it
-			Obs previous = newObs.getPreviousVersion();
-			if (newObs.hasPreviousVersion() && previous.isComplex()
-			        && !Objects.equals(previous.getValueComplex(), newObs.getValueComplex())
-			        && !dao.isComplexDataCaptured(previous.getValueComplex())) {
-				ComplexObsHandler handler = getHandler(newObs.getPreviousVersion());
-				handler.purgeComplexData(newObs.getPreviousVersion());
+			// a capture holds it; judged on the obs as saved, not as passed in
+			if (obs.isComplex() && !Objects.equals(obs.getValueComplex(), newObs.getValueComplex())
+			        && !dao.isComplexDataCaptured(obs.getValueComplex())) {
+				getHandler(obs).purgeComplexData(obs);
 			}
 			// calling this via the service so that AOP hooks are called
 			Context.getObsService().voidObs(obs, changeMessage);
@@ -424,13 +426,16 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 * than failing.
 	 */
 	private Obs withComplexData(Obs obs) {
+		ComplexObsHandler handler = getHandler(obs);
 		try {
-			return getHandler(obs).getObs(obs, ComplexObsHandler.RAW_VIEW);
+			return handler.getObs(obs, ComplexObsHandler.RAW_VIEW);
 		} catch (RuntimeException e) {
-			if (!obs.getVoided()) {
+			// only a voided obs whose file is gone; any other failure is a failure
+			if (!obs.getVoided() || !(handler instanceof AbstractHandler)
+			        || storageService.exists(((AbstractHandler) handler).parseDataKey(obs))) {
 				throw e;
 			}
-			log.debug("The file of voided complex obs {} could not be read", obs.getUuid(), e);
+			log.warn("The file of voided complex obs {} is gone; returning it without its data", obs.getUuid());
 			return obs;
 		}
 	}
@@ -502,8 +507,9 @@ public class ObsServiceImpl extends BaseOpenmrsService implements ObsService, Re
 	 */
 	@Override
 	public void purgeObs(Obs obs, boolean cascade) throws APIException {
-		// a capture's artifact is part of the record: its obs, and any version sharing its file, stay
-		if (obs != null && obs.isComplex() && dao.isComplexDataCaptured(obs.getValueComplex())) {
+		// a capture nothing points to goes with its obs, as an attachment deleted by mistake would; one
+		// that something points to keeps its obs, and any version sharing its file
+		if (obs != null && obs.isComplex() && !dao.releaseCaptures(obs.getValueComplex())) {
 			throw new APIException("Obs.error.captured", new Object[] { obs.getUuid() });
 		}
 		if (!purgeComplexData(obs)) {
